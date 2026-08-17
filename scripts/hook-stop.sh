@@ -8,7 +8,17 @@ ANIMA_PORT="${ANIMA_PORT:-4317}"
 # Read input from stdin
 input=$(cat)
 
-session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null || echo "$(date +%s)-$$")
+session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null)
+
+if [ -z "$session_id" ]; then
+  session_id="${CLAUDE_CODE_SESSION_ID:-}"
+fi
+
+if [ -z "$session_id" ]; then
+  project=$(basename "$(pwd)" 2>/dev/null | tr -cd 'a-zA-Z0-9' | cut -c1-20)
+  session_id="$(date +%s)-$$-${project}"
+fi
+
 cwd=$(pwd)
 
 # Log stop event

@@ -11,7 +11,21 @@ input=$(cat)
 
 tool_name=$(echo "$input" | jq -r '.tool_name // empty' 2>/dev/null)
 tool_input=$(echo "$input" | jq '.tool_input // {}' 2>/dev/null)
-session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null || echo "$(date +%s)-$$")
+
+# Try to extract session_id from multiple sources
+session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null)
+
+# Fallback: try environment variable
+if [ -z "$session_id" ]; then
+  session_id="${CLAUDE_CODE_SESSION_ID:-}"
+fi
+
+# Fallback: generate from timestamp + PID
+if [ -z "$session_id" ]; then
+  project=$(basename "$(pwd)" 2>/dev/null | tr -cd 'a-zA-Z0-9' | cut -c1-20)
+  session_id="$(date +%s)-$$-${project}"
+fi
+
 cwd=$(pwd)
 
 # Handle Bash tool - request approval

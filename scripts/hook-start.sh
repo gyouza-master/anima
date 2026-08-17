@@ -8,19 +8,48 @@ ANIMA_PORT="${ANIMA_PORT:-4317}"
 # Read input from stdin
 input=$(cat)
 
-# Extract session_id and cwd from Claude Code context
-session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null || echo "$(date +%s)-$$")
+# Try to extract session_id from multiple sources
+session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null)
+
+# Fallback: try environment variable
+if [ -z "$session_id" ]; then
+  session_id="${CLAUDE_CODE_SESSION_ID:-}"
+fi
+
+# Fallback: generate from timestamp + PID + project
+if [ -z "$session_id" ]; then
+  project=$(basename "$(pwd)" 2>/dev/null | tr -cd 'a-zA-Z0-9' | cut -c1-20)
+  session_id="$(date +%s)-$$-${project}"
+fi
+
 cwd=$(pwd)
 
-# Send session start event
-curl -s -X POST "http://${ANIMA_HOST}:${ANIMA_PORT}/api/events" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"adapter\": \"claude-code\",
-    \"session_id\": \"$session_id\",
-    \"cwd\": \"$cwd\",
-    \"kind\": \"start\",
-    \"ts\": $(date +%s)
-  }" > /dev/null 2>&1
+# Retry logic for daemon availability
+send_event() {
+  local attempt=1
+  local max_attempts=3
+  while [ $attempt -le $max_attempts ]; do
+    response=$(curl -s -X POST "http://${ANIMA_HOST}:${ANIMA_PORT}/api/events" \
+      -H "Content-Type: application/json" \
+      -d "{
+        \"adapter\": \"claude-code\",
+        \"session_id\": \"$session_id\",
+        \"cwd\": \"$cwd\",
+        \"kind\": \"start\",
+        \"detail\": \"Session started\",
+        \"ts\": $(date +%s)
+      }" 2>/dev/null)
+
+    if echo "$response" | grep -q '"ok"'; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 0.5
+  done
+  return 1
+}
+
+# Send session start event (non-blocking)
+send_event &
 
 echo "$input"

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>anima - 管制塔</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    .connection-status {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .connection-status.connected {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .connection-status.disconnected {
+      background: #f44336;
+      color: white;
+    }
+
+    .slots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    .slot-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease;
+    }
+
+    .slot-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .slot-empty {
+      background: #f9f9f9;
+      border: 2px dashed #ccc;
+      color: #999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+    }
+
+    .character-badge {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 12px;
+      vertical-align: middle;
+    }
+
+    .character-name {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .session-info {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 10px;
+      font-family: 'Monaco', monospace;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .status-working {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .status-awaiting-approval {
+      background: #FF9800;
+      color: white;
+    }
+
+    .status-awaiting-input {
+      background: #2196F3;
+      color: white;
+    }
+
+    .status-idle {
+      background: #E0E0E0;
+      color: #666;
+    }
+
+    .status-error {
+      background: #f44336;
+      color: white;
+    }
+
+    .activity-text {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 8px;
+      font-family: 'Monaco', monospace;
+      word-break: break-all;
+    }
+
+    .elapsed-time {
+      font-size: 12px;
+      color: #999;
+      margin-top: 8px;
+    }
+
+    .queue-section {
+      margin-top: 40px;
+    }
+
+    .queue-section h2 {
+      font-size: 16px;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    .queue-list {
+      background: white;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .queue-item {
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+      color: #666;
+      font-family: 'Monaco', monospace;
+    }
+
+    .queue-item:last-child {
+      border-bottom: none;
+    }
+
+    .queue-empty {
+      color: #999;
+      font-style: italic;
+    }
+
+    .approvals-section {
+      background: #fff5f5;
+      border: 2px solid #f44336;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 40px;
+    }
+
+    .approval-card {
+      background: white;
+      border: 2px solid #ff9800;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 12px rgba(244, 67, 54, 0.2);
+    }
+
+    .approval-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .approval-header .character-badge {
+      margin-right: 12px;
+    }
+
+    .approval-header .character-name {
+      margin-bottom: 0;
+    }
+
+    .approval-tool {
+      background: #f5f5f5;
+      border-left: 4px solid #ff9800;
+      padding: 12px;
+      margin-bottom: 16px;
+      border-radius: 4px;
+      font-family: 'Monaco', monospace;
+      font-size: 13px;
+      word-break: break-all;
+      color: #333;
+    }
+
+    .approval-buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    .approval-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .approval-btn-allow {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .approval-btn-allow:hover {
+      background: #45a049;
+    }
+
+    .approval-btn-deny {
+      background: #f44336;
+      color: white;
+    }
+
+    .approval-btn-deny:hover {
+      background: #da190b;
+    }
+
+    .approval-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="connection-status disconnected" id="connectionStatus">接続中...</div>
+
+  <div class="container">
+    <h1>⚙️ anima - 管制塔</h1>
+
+    <section id="approvalsSection" class="approvals-section" style="display: none;">
+      <h2 style="margin-bottom: 20px; color: #c00;">🔔 承認待ち</h2>
+      <div id="approvalsContainer"></div>
+    </section>
+
+    <section class="slots-section">
+      <h2 style="margin-bottom: 20px; color: #666;">セッションスロット</h2>
+      <div class="slots-grid" id="slotsContainer"></div>
+    </section>
+
+    <section class="queue-section">
+      <h2>待機キュー</h2>
+      <div class="queue-list" id="queueContainer">
+        <div class="queue-item queue-empty">空</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const WS_URL = `ws://${window.location.hostname}:4317/ws`;
+    let ws = null;
+    let state = {
+      sessions: {},
+      queue: [],
+      pendingApprovals: {}
+    };
+
+    const statusMap = {
+      'working': { badge: '🟢 動作中', class: 'status-working' },
+      'awaiting-approval': { badge: '🟠 判断待ち', class: 'status-awaiting-approval' },
+      'awaiting-input': { badge: '🔵 入力待ち', class: 'status-awaiting-input' },
+      'idle': { badge: '⚪️ 待機', class: 'status-idle' },
+      'done': { badge: '⚪️ 完了', class: 'status-idle' },
+      'error': { badge: '🔴 エラー', class: 'status-error' }
+    };
+
+    function connectWebSocket() {
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        updateConnectionStatus(true);
+      };
+
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'initial_state' || message.type === 'state_update') {
+          state = message.data;
+          render();
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        updateConnectionStatus(false);
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    function updateConnectionStatus(connected) {
+      const statusEl = document.getElementById('connectionStatus');
+      if (connected) {
+        statusEl.textContent = '接続中';
+        statusEl.className = 'connection-status connected';
+      } else {
+        statusEl.textContent = '接続なし';
+        statusEl.className = 'connection-status disconnected';
+      }
+    }
+
+    function formatTime(ms) {
+      if (!ms) return '-';
+      const seconds = Math.floor(ms / 1000);
+      const minutes = Math.floor(seconds / 60);
+      if (minutes > 0) return `${minutes}分${seconds % 60}秒`;
+      return `${seconds}秒`;
+    }
+
+    function render() {
+      renderApprovals();
+      renderSlots();
+      renderQueue();
+    }
+
+    function renderApprovals() {
+      const container = document.getElementById('approvalsContainer');
+      const section = document.getElementById('approvalsSection');
+      const approvals = Object.values(state.pendingApprovals || {});
+
+      if (approvals.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = 'block';
+      container.innerHTML = approvals.map(approval => {
+        const session = state.sessions[approval.session_id];
+        const toolInput = JSON.stringify(approval.tool_input, null, 2);
+
+        return `
+          <div class="approval-card">
+            <div class="approval-header">
+              ${session ? `<span class="character-badge" style="background-color: ${session.color}"></span>` : ''}
+              <div>
+                <div class="character-name">${session?.character_name || 'Unknown'}</div>
+                <div class="session-info">🔗 ${approval.session_id.substring(0, 8)}</div>
+              </div>
+            </div>
+            <div style="margin-bottom: 12px; color: #666; font-weight: bold;">
+              🔧 ${approval.tool_name}
+            </div>
+            <div class="approval-tool">
+              ${escapeHtml(toolInput)}
+            </div>
+            <div class="approval-buttons">
+              <button class="approval-btn approval-btn-allow" onclick="makeDecision('${approval.id}', 'allow')">
+                ✓ 許可
+              </button>
+              <button class="approval-btn approval-btn-deny" onclick="makeDecision('${approval.id}', 'deny')">
+                ✕ 拒否
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    async function makeDecision(approvalId, decision) {
+      try {
+        const response = await fetch(`http://${window.location.hostname}:4317/api/approvals/${approvalId}/decision`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decision, reason: '' })
+        });
+        if (response.ok) {
+          console.log(`Approval ${approvalId} decided: ${decision}`);
+        }
+      } catch (error) {
+        console.error('Error making decision:', error);
+      }
+    }
+
+    function renderSlots() {
+      const container = document.getElementById('slotsContainer');
+      const slots = Array.from({ length: 6 }, (_, i) => i + 1);
+
+      container.innerHTML = slots.map(slotId => {
+        const session = Object.values(state.sessions || {}).find(s => s.slot_id === slotId);
+
+        if (!session) {
+          return `
+            <div class="slot-card slot-empty">
+              スロット ${slotId}
+            </div>
+          `;
+        }
+
+        const statusInfo = statusMap[session.status] || { badge: '不明', class: 'status-idle' };
+        const elapsedMs = Date.now() - (session.status_changed_at || Date.now());
+
+        return `
+          <div class="slot-card">
+            <div style="margin-bottom: 12px;">
+              <span class="character-badge" style="background-color: ${session.color}"></span>
+              <span class="character-name">${session.character_name}</span>
+            </div>
+            <div class="session-info">
+              📁 ${session.cwd ? session.cwd.split('/').pop() : 'unknown'}<br>
+              🔗 ${session.session_id.substring(0, 8)}
+            </div>
+            <div class="status-badge ${statusInfo.class}">
+              ${statusInfo.badge}
+            </div>
+            <div class="activity-text">
+              ${session.detail || 'アクティビティなし'}
+            </div>
+            <div class="elapsed-time">
+              ⏱️ ${formatTime(elapsedMs)}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderQueue() {
+      const container = document.getElementById('queueContainer');
+      const queue = state.queue || [];
+
+      if (queue.length === 0) {
+        container.innerHTML = '<div class="queue-item queue-empty">空</div>';
+      } else {
+        container.innerHTML = queue.map((item, index) => `
+          <div class="queue-item">
+            #${index + 1}: ${item.cwd ? item.cwd.split('/').pop() : 'unknown'} (${item.session_id.substring(0, 8)})
+          </div>
+        `).join('');
+      }
+    }
+
+    // Start
+    connectWebSocket();
+  </script>
+</body>
+</html>

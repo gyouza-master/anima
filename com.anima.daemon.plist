@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.anima.daemon</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/node</string>
+		<string>{{INSTALL_PATH}}/src/daemon.js</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>{{HOME}}/Library/Logs/anima/daemon.log</string>
+	<key>StandardErrorPath</key>
+	<string>{{HOME}}/Library/Logs/anima/daemon-error.log</string>
+	<key>WorkingDirectory</key>
+	<string>{{INSTALL_PATH}}</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>ANIMA_HOST</key>
+		<string>localhost</string>
+		<key>ANIMA_PORT</key>
+		<string>4317</string>
+	</dict>
+</dict>
+</plist>

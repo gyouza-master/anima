@@ -1,0 +1,15 @@
+{
+  "port": 4317,
+  "approval_timeout_ms": 120000,
+  "matchers": [
+    {
+      "name": "Bash commands",
+      "tool_name": "Bash",
+      "enabled": true
+    }
+  ],
+  "notification": {
+    "use_osascript": true
+  },
+  "session_cleanup_ms": 1800000
+}

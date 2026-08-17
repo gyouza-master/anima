@@ -1,0 +1,21 @@
+anima - ChatGPT監視ブックマークレット
+=====================================
+
+【登録方法】
+1. Chromeのブックマークバーを表示（⌘+Shift+B）
+2. ブックマークバーを右クリック →「ページを追加」
+3. 名前:「anima監視」、URL: 下の1行をまるごと貼り付け
+4. 保存
+
+【使い方】
+- 制作中の chatgpt.com タブを開いた状態で「anima監視」をクリック
+- 画面右下に「anima 監視開始」と出れば成功
+- 生成が始まると anima で「作業中」、終わると「返信待ち（生成完了）」に変わる
+- ※ページを完全リロードすると監視は止まるので、再度クリック
+
+【前提】
+- anima デーモンが起動していること（npm start / CORS対応済みの版）
+
+--- ここから下の1行をコピー ---
+
+javascript:(function(){if(window.__animaChatGPT){var e=document.createElement('div');e.textContent='anima: 既に監視中';e.style.cssText='position:fixed;bottom:20px;right:20px;background:#888;color:#fff;padding:10px 16px;border-radius:8px;z-index:99999;font-family:sans-serif';document.body.appendChild(e);setTimeout(function(){e.remove();},2000);return;}window.__animaChatGPT=true;var A='http://localhost:4317',S='chatgpt-tab',last=null;function g(){return !!document.querySelector('[data-testid="stop-button"],button[aria-label*="停止"],button[aria-label*="Stop"]');}function t(){return (document.title||'ChatGPT').replace(/\s*[-–—]\s*ChatGPT.*/,'')||'ChatGPT';}function s(k,d){fetch(A+'/api/events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adapter:'chatgpt-browser',session_id:S,cwd:'/'+t(),kind:k,model_name:'ChatGPT',detail:d,ts:Math.floor(Date.now()/1000)})}).catch(function(){});}var b=document.createElement('div');b.textContent='anima 監視開始';b.style.cssText='position:fixed;bottom:20px;right:20px;background:#4ECDC4;color:#fff;padding:10px 16px;border-radius:8px;z-index:99999;font-family:sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.2)';document.body.appendChild(b);setTimeout(function(){b.remove();},2500);s('start','接続しました');setInterval(function(){var x=g();if(x!==last){if(x)s('prompt','生成中: '+t());else if(last!==null)s('stop','生成完了: '+t());last=x;}},1000);})();

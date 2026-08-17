@@ -1,34 +1,10 @@
 {
   "slots": [
-    {
-      "id": 1,
-      "name": "Claude",
-      "color": "#FF6B6B"
-    },
-    {
-      "id": 2,
-      "name": "Opus",
-      "color": "#4ECDC4"
-    },
-    {
-      "id": 3,
-      "name": "Sonnet",
-      "color": "#FFE66D"
-    },
-    {
-      "id": 4,
-      "name": "Haiku",
-      "color": "#95E1D3"
-    },
-    {
-      "id": 5,
-      "name": "Sage",
-      "color": "#C7B3E5"
-    },
-    {
-      "id": 6,
-      "name": "Nova",
-      "color": "#F38181"
-    }
+    { "id": 1, "name": "ゼン", "color": "#22D3EE", "body": "slim",  "deco": "rod",   "visor": "band",  "mark": "bar" },
+    { "id": 2, "name": "ノア", "color": "#A78BFA", "body": "chibi", "deco": "ears",  "visor": "oval",  "mark": "dot" },
+    { "id": 3, "name": "カイ", "color": "#F97316", "body": "wedge", "deco": "horns", "visor": "slash", "mark": "tri" },
+    { "id": 4, "name": "ミオ", "color": "#EC4899", "body": "ball",  "deco": "puffs", "visor": "band",  "mark": "ring" },
+    { "id": 5, "name": "クロ", "color": "#10B981", "body": "dome",  "deco": "none",  "visor": "slit",  "mark": "line" },
+    { "id": 6, "name": "ハル", "color": "#FACC15", "body": "egg",   "deco": "curl",  "visor": "oval",  "mark": "star" }
   ]
 }

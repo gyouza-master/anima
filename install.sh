@@ -35,16 +35,18 @@ fi
 echo "Registering hooks..."
 jq \
   --arg start "$HOOKS_DIR/hook-start.sh" \
+  --arg prompt "$HOOKS_DIR/hook-user-prompt.sh" \
   --arg pre "$HOOKS_DIR/hook-pre-tool-use.sh" \
   --arg post "$HOOKS_DIR/hook-post-tool-use.sh" \
   --arg notif "$HOOKS_DIR/hook-notification.sh" \
   --arg stop "$HOOKS_DIR/hook-stop.sh" \
   '.hooks = {
-    SessionStart: [ { hooks: [ { type: "command", command: $start } ] } ],
-    PreToolUse:   [ { matcher: "", hooks: [ { type: "command", command: $pre } ] } ],
-    PostToolUse:  [ { matcher: "", hooks: [ { type: "command", command: $post } ] } ],
-    Notification: [ { hooks: [ { type: "command", command: $notif } ] } ],
-    Stop:         [ { hooks: [ { type: "command", command: $stop } ] } ]
+    SessionStart:     [ { hooks: [ { type: "command", command: $start } ] } ],
+    UserPromptSubmit: [ { hooks: [ { type: "command", command: $prompt } ] } ],
+    PreToolUse:       [ { matcher: "", hooks: [ { type: "command", command: $pre } ] } ],
+    PostToolUse:      [ { matcher: "", hooks: [ { type: "command", command: $post } ] } ],
+    Notification:     [ { hooks: [ { type: "command", command: $notif } ] } ],
+    Stop:             [ { hooks: [ { type: "command", command: $stop } ] } ]
   }' \
   "$SETTINGS_LOCAL" > "$SETTINGS_LOCAL.tmp" && mv "$SETTINGS_LOCAL.tmp" "$SETTINGS_LOCAL"
 

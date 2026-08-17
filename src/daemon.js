@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 import { sendNotification } from './notification.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -131,6 +132,15 @@ function logEvent(event) {
 }
 
 // Middleware
+// CORS: allow browser adapters (e.g. a ChatGPT tab on chatgpt.com) to POST events.
+// The daemon binds to localhost only, so this stays on-machine.
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
 app.use(express.json());
 app.use(express.static(join(__dirname, '../public')));
 
@@ -144,6 +154,67 @@ app.get('/health', (req, res) => {
 // Get current state (includes roster)
 app.get('/api/state', (req, res) => {
   res.json(getStatePayload());
+});
+
+// Known AI apps/CLIs to detect, matched by the process's executable basename.
+// The FIRST match wins, so put more specific names first. Helper subprocesses
+// (renderers, services) have different basenames and are naturally skipped.
+const KNOWN_AIS = [
+  { name: 'Claude Code', bin: 'claude', kind: 'cli' },
+  { name: 'ChatGPT', bin: 'ChatGPT', kind: 'app' },
+  { name: 'Cursor', bin: 'Cursor', kind: 'app' }
+];
+
+// Discover running AI sessions (Claude Code CLI, ChatGPT app, etc.).
+// Returns each process's pid, cwd, start time, AI name, and whether anima tracks it.
+app.get('/api/discover', (req, res) => {
+  const found = [];
+  try {
+    const psOut = execSync('ps -axo pid=,comm=', { encoding: 'utf-8' });
+    psOut.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      const sp = trimmed.indexOf(' ');
+      if (sp < 0) return;
+      const pid = trimmed.slice(0, sp).trim();
+      const comm = trimmed.slice(sp + 1).trim();
+      const base = comm.split('/').pop();
+
+      const ai = KNOWN_AIS.find(a => a.bin === base);
+      if (!ai) return;
+
+      let cwd = '';
+      try {
+        const lsof = execSync(`lsof -a -p ${pid} -d cwd -Fn 2>/dev/null`, { encoding: 'utf-8' });
+        const nline = lsof.split('\n').find(x => x.startsWith('n'));
+        if (nline) cwd = nline.slice(1);
+      } catch { /* ignore */ }
+
+      let started = '';
+      try {
+        started = execSync(`ps -o lstart= -p ${pid}`, { encoding: 'utf-8' }).trim();
+      } catch { /* ignore */ }
+
+      // For CLI tools the cwd (project) is meaningful; for apps it's usually "/".
+      const hasProject = cwd && cwd !== '/';
+      const project = ai.kind === 'cli' && hasProject
+        ? `${ai.name} · ${cwd.split('/').pop()}`
+        : ai.name;
+
+      const sessionId = `pid-${pid}`;
+      found.push({
+        pid,
+        session_id: sessionId,
+        ai_name: ai.name,
+        cwd,
+        project,
+        started,
+        connected: !!state.sessions[sessionId]
+      });
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'discover failed', detail: String(err) });
+  }
+  res.json({ sessions: found });
 });
 
 // Get roster (slot names / colors)
@@ -164,6 +235,7 @@ app.post('/api/roster', (req, res) => {
     if (slot) {
       if (typeof incoming.name === 'string' && incoming.name.trim()) slot.name = incoming.name.trim();
       if (typeof incoming.color === 'string' && incoming.color.trim()) slot.color = incoming.color.trim();
+      if (typeof incoming.emoji === 'string' && incoming.emoji.trim()) slot.emoji = incoming.emoji.trim();
     }
   });
 
@@ -212,14 +284,25 @@ app.post('/api/events', (req, res) => {
   logEvent({ adapter, session_id, cwd, kind, status, detail });
 
   // Handle different event kinds
+  //
+  // Timer semantics: status_changed_at marks "when we started waiting for YOU".
+  //   - prompt (you sent a message) -> reset timer, AI is now working
+  //   - activity (AI ran a tool)    -> keep timer running (don't reset mid-work)
+  //   - stop (AI finished replying)  -> reset timer; from here it counts how long
+  //                                     the AI has been waiting for your reply
   if (kind === 'start') {
     assignSessionToSlot(session_id, { session_id, cwd, adapter, model, model_name });
+  } else if (kind === 'prompt') {
+    if (state.sessions[session_id]) {
+      state.sessions[session_id].status = 'working';
+      state.sessions[session_id].detail = 'あなたのメッセージを処理中';
+      state.sessions[session_id].status_changed_at = Date.now(); // reset on your send
+    }
   } else if (kind === 'activity') {
     if (state.sessions[session_id]) {
       state.sessions[session_id].status = status || 'working';
       state.sessions[session_id].detail = detail;
-      // Always reset timer on activity
-      state.sessions[session_id].status_changed_at = Date.now();
+      // Do NOT reset the timer here — the AI is mid-work, still your turn later.
       if (model) state.sessions[session_id].model = model;
       if (model_name) state.sessions[session_id].model_name = model_name;
     }
@@ -230,16 +313,10 @@ app.post('/api/events', (req, res) => {
     }
   } else if (kind === 'stop') {
     if (state.sessions[session_id]) {
-      state.sessions[session_id].status = 'done';
+      // AI finished replying — now waiting for your reply. Start counting here.
+      state.sessions[session_id].status = 'idle';
+      state.sessions[session_id].detail = '返答完了・あなたの返信待ち';
       state.sessions[session_id].status_changed_at = ts || Date.now();
-      // Auto-cleanup after 30 minutes
-      setTimeout(() => {
-        if (state.sessions[session_id]?.status === 'done') {
-          const slotId = state.sessions[session_id].slot_id;
-          delete state.sessions[session_id];
-          processQueue();
-        }
-      }, config.session_cleanup_ms || 1800000);
     }
   }
 
@@ -372,6 +449,18 @@ app.post('/api/approvals/:id/decision', (req, res) => {
     approval.responseCallback();
   }
 
+  res.json({ ok: true });
+});
+
+// Set a session's task name (the user-editable "what am I working on" label)
+app.post('/api/sessions/:id/task', (req, res) => {
+  const session = state.sessions[req.params.id];
+  if (!session) {
+    return res.status(404).json({ error: 'session not found' });
+  }
+  const { task } = req.body;
+  session.task = typeof task === 'string' ? task : '';
+  broadcastState();
   res.json({ ok: true });
 });
 

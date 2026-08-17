@@ -1,7 +1,7 @@
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
-import { readFileSync, appendFileSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { sendNotification } from './notification.js';
@@ -102,11 +102,16 @@ function processQueue() {
   }
 }
 
+// Build the full payload sent to the UI (state + roster for name/color labels)
+function getStatePayload() {
+  return { ...state, roster: roster.slots };
+}
+
 // Broadcast state to all connected WebSocket clients
 function broadcastState() {
   const message = JSON.stringify({
     type: 'state_update',
-    data: state
+    data: getStatePayload()
   });
   wss.clients.forEach(client => {
     if (client.readyState === 1) { // OPEN
@@ -136,14 +141,69 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
-// Get current state
+// Get current state (includes roster)
 app.get('/api/state', (req, res) => {
-  res.json(state);
+  res.json(getStatePayload());
+});
+
+// Get roster (slot names / colors)
+app.get('/api/roster', (req, res) => {
+  res.json({ slots: roster.slots });
+});
+
+// Update roster (slot names / colors) — persists to config/roster.json
+app.post('/api/roster', (req, res) => {
+  const { slots } = req.body;
+  if (!Array.isArray(slots)) {
+    return res.status(400).json({ error: 'slots array required' });
+  }
+
+  // Merge incoming values into the existing roster by slot id
+  slots.forEach(incoming => {
+    const slot = roster.slots.find(s => s.id === incoming.id);
+    if (slot) {
+      if (typeof incoming.name === 'string' && incoming.name.trim()) slot.name = incoming.name.trim();
+      if (typeof incoming.color === 'string' && incoming.color.trim()) slot.color = incoming.color.trim();
+    }
+  });
+
+  // Persist to disk
+  writeFileSync(rosterPath, JSON.stringify(roster, null, 2));
+
+  // Reflect new names/colors onto any active sessions
+  Object.values(state.sessions).forEach(s => {
+    const slot = roster.slots.find(x => x.id === s.slot_id);
+    if (slot) {
+      s.character_name = slot.name;
+      s.color = slot.color;
+    }
+  });
+
+  broadcastState();
+  res.json({ ok: true, slots: roster.slots });
+});
+
+// Delete a single session (manual clear)
+app.delete('/api/sessions/:id', (req, res) => {
+  if (state.sessions[req.params.id]) {
+    delete state.sessions[req.params.id];
+    processQueue();
+    broadcastState();
+  }
+  res.json({ ok: true });
+});
+
+// Clear all sessions and the queue (cleanup)
+app.post('/api/sessions/clear', (req, res) => {
+  state.sessions = {};
+  state.queue = [];
+  broadcastState();
+  res.json({ ok: true });
 });
 
 // Event endpoint
 app.post('/api/events', (req, res) => {
-  const { adapter, session_id, cwd, kind, status, detail, ts } = req.body;
+  const { adapter, session_id, cwd, kind, status, detail, ts, model, model_name } = req.body;
 
   if (!session_id) {
     return res.status(400).json({ error: 'session_id required' });
@@ -153,12 +213,15 @@ app.post('/api/events', (req, res) => {
 
   // Handle different event kinds
   if (kind === 'start') {
-    assignSessionToSlot(session_id, { session_id, cwd, adapter });
+    assignSessionToSlot(session_id, { session_id, cwd, adapter, model, model_name });
   } else if (kind === 'activity') {
     if (state.sessions[session_id]) {
       state.sessions[session_id].status = status || 'working';
       state.sessions[session_id].detail = detail;
-      state.sessions[session_id].status_changed_at = ts || Date.now();
+      // Always reset timer on activity
+      state.sessions[session_id].status_changed_at = Date.now();
+      if (model) state.sessions[session_id].model = model;
+      if (model_name) state.sessions[session_id].model_name = model_name;
     }
   } else if (kind === 'notification') {
     if (state.sessions[session_id]) {
@@ -312,6 +375,26 @@ app.post('/api/approvals/:id/decision', (req, res) => {
   res.json({ ok: true });
 });
 
+// Reset session timer
+app.post('/api/sessions/:id/reset-timer', (req, res) => {
+  const sessionId = req.params.id;
+
+  const session = state.sessions[sessionId];
+  if (!session) {
+    return res.status(404).json({ error: 'session not found' });
+  }
+
+  session.status_changed_at = Date.now();
+  broadcastState();
+
+  logEvent({
+    kind: 'timer_reset',
+    session_id: sessionId
+  });
+
+  res.json({ ok: true, session_id: sessionId });
+});
+
 // WebSocket connection
 wss.on('connection', (ws) => {
   console.log('WebSocket client connected');
@@ -319,7 +402,7 @@ wss.on('connection', (ws) => {
   // Send initial state
   ws.send(JSON.stringify({
     type: 'initial_state',
-    data: state
+    data: getStatePayload()
   }));
 
   ws.on('close', () => {

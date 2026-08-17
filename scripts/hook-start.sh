@@ -24,32 +24,32 @@ fi
 
 cwd=$(pwd)
 
-# Retry logic for daemon availability
-send_event() {
-  local attempt=1
-  local max_attempts=3
-  while [ $attempt -le $max_attempts ]; do
-    response=$(curl -s -X POST "http://${ANIMA_HOST}:${ANIMA_PORT}/api/events" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"adapter\": \"claude-code\",
-        \"session_id\": \"$session_id\",
-        \"cwd\": \"$cwd\",
-        \"kind\": \"start\",
-        \"detail\": \"Session started\",
-        \"ts\": $(date +%s)
-      }" 2>/dev/null)
+# Try to extract model from input or environment
+model=$(echo "$input" | jq -r '.model // empty' 2>/dev/null)
+model_name=$(echo "$input" | jq -r '.model_name // empty' 2>/dev/null)
 
-    if echo "$response" | grep -q '"ok"'; then
-      return 0
-    fi
-    attempt=$((attempt + 1))
-    sleep 0.5
-  done
-  return 1
-}
+# Fallback: try environment variables
+if [ -z "$model" ]; then
+  model="${CLAUDE_MODEL:-}"
+fi
+if [ -z "$model_name" ]; then
+  model_name="${CLAUDE_MODEL_NAME:-Claude}"
+fi
 
-# Send session start event (non-blocking)
-send_event &
+# Send session start event synchronously (with short timeout so a stopped
+# daemon never blocks Claude Code startup). Must NOT be backgrounded: the hook
+# process exits immediately after, which would kill an unfinished curl.
+curl -s --max-time 3 -X POST "http://${ANIMA_HOST}:${ANIMA_PORT}/api/events" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"adapter\": \"claude-code\",
+    \"session_id\": \"$session_id\",
+    \"cwd\": \"$cwd\",
+    \"kind\": \"start\",
+    \"detail\": \"Session started\",
+    \"model\": \"${model:-claude-haiku}\",
+    \"model_name\": \"${model_name:-Claude Haiku}\",
+    \"ts\": $(date +%s)
+  }" > /dev/null 2>&1
 
 echo "$input"

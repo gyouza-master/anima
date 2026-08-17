@@ -1,10 +1,34 @@
 {
   "slots": [
-    {"id": 1, "name": "Claude", "color": "#FF6B6B"},
-    {"id": 2, "name": "Opus", "color": "#4ECDC4"},
-    {"id": 3, "name": "Sonnet", "color": "#FFE66D"},
-    {"id": 4, "name": "Haiku", "color": "#95E1D3"},
-    {"id": 5, "name": "Sage", "color": "#C7B3E5"},
-    {"id": 6, "name": "Nova", "color": "#F38181"}
+    {
+      "id": 1,
+      "name": "Claude",
+      "color": "#FF6B6B"
+    },
+    {
+      "id": 2,
+      "name": "Opus",
+      "color": "#4ECDC4"
+    },
+    {
+      "id": 3,
+      "name": "Sonnet",
+      "color": "#FFE66D"
+    },
+    {
+      "id": 4,
+      "name": "Haiku",
+      "color": "#95E1D3"
+    },
+    {
+      "id": 5,
+      "name": "Sage",
+      "color": "#C7B3E5"
+    },
+    {
+      "id": 6,
+      "name": "Nova",
+      "color": "#F38181"
+    }
   ]
 }

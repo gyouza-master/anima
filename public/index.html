@@ -270,7 +270,40 @@
   <div class="connection-status disconnected" id="connectionStatus">接続中...</div>
 
   <div class="container">
-    <h1>⚙️ anima - 管制塔</h1>
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+      <h1 style="margin-bottom: 0;">⚙️ anima - 管制塔</h1>
+      <div style="display: flex; gap: 10px;">
+        <button onclick="openConnectModal()" style="padding: 8px 16px; font-size: 13px; border: none; background: #4ECDC4; color: white; font-weight: bold; border-radius: 6px; cursor: pointer;">+ 接続</button>
+        <button onclick="clearAllSessions()" style="padding: 8px 16px; font-size: 13px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer;">🧹 全スロットをクリア</button>
+      </div>
+    </div>
+
+    <!-- 接続モーダル -->
+    <div id="connectModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;">
+      <div style="background: white; border-radius: 12px; padding: 28px; width: 90%; max-width: 420px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+        <h2 style="margin-bottom: 20px; color: #333;">AI を接続</h2>
+
+        <label style="display: block; font-size: 13px; color: #666; margin-bottom: 6px;">使用している AI</label>
+        <select id="connectModel" style="width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 16px;">
+          <option value="Claude Opus 4.8">Claude Opus 4.8</option>
+          <option value="Claude Sonnet 5">Claude Sonnet 5</option>
+          <option value="Claude Haiku 4.5">Claude Haiku 4.5</option>
+          <option value="Claude Code">Claude Code</option>
+          <option value="Claude Design">Claude Design</option>
+          <option value="__other__">その他（自由入力）</option>
+        </select>
+
+        <input id="connectModelOther" type="text" placeholder="AI名を入力" style="display: none; width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 16px;">
+
+        <label style="display: block; font-size: 13px; color: #666; margin-bottom: 6px;">プロジェクト / ラベル（任意）</label>
+        <input id="connectLabel" type="text" placeholder="例: anima 開発" style="width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 24px;">
+
+        <div style="display: flex; gap: 12px;">
+          <button onclick="submitConnect()" style="flex: 1; padding: 12px; border: none; background: #4ECDC4; color: white; font-weight: bold; border-radius: 6px; cursor: pointer;">接続する</button>
+          <button onclick="closeConnectModal()" style="flex: 1; padding: 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer;">キャンセル</button>
+        </div>
+      </div>
+    </div>
 
     <section id="approvalsSection" class="approvals-section" style="display: none;">
       <h2 style="margin-bottom: 20px; color: #c00;">🔔 承認待ち</h2>
@@ -320,7 +353,8 @@
         const message = JSON.parse(event.data);
         if (message.type === 'initial_state' || message.type === 'state_update') {
           state = message.data;
-          render();
+          // Don't re-render mid-edit or the name input would be wiped out
+          if (editingSlot === null) render();
         }
       };
 
@@ -359,6 +393,14 @@
       renderSlots();
       renderQueue();
     }
+
+    // Auto-refresh UI every 1 second to update elapsed time
+    // (skip while editing a name so the input isn't wiped out)
+    setInterval(() => {
+      if (ws && ws.readyState === 1 && editingSlot === null) {
+        render();
+      }
+    }, 1000);
 
     function renderApprovals() {
       const container = document.getElementById('approvalsContainer');
@@ -424,17 +466,86 @@
       }
     }
 
+    async function resetTimer(sessionId) {
+      try {
+        const response = await fetch(`http://${window.location.hostname}:4317/api/sessions/${sessionId}/reset-timer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        if (response.ok) {
+          console.log(`Timer reset for session ${sessionId}`);
+        }
+      } catch (error) {
+        console.error('Error resetting timer:', error);
+      }
+    }
+
+    let editingSlot = null;
+
+    function startEdit(slotId) {
+      editingSlot = slotId;
+      render();
+      setTimeout(() => {
+        const el = document.getElementById('edit-input');
+        if (el) { el.focus(); el.select(); }
+      }, 0);
+    }
+
+    function cancelEdit() {
+      editingSlot = null;
+      render();
+    }
+
+    async function saveRosterName(slotId, name, color) {
+      editingSlot = null;
+      try {
+        await fetch(`http://${window.location.hostname}:4317/api/roster`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slots: [{ id: slotId, name, color }] })
+        });
+        // broadcast will re-render; render locally too in case WS is slow
+        render();
+      } catch (error) {
+        console.error('Error saving roster name:', error);
+      }
+    }
+
+    // Renders the character name area with an inline edit control
+    function nameBlock(slotId, char) {
+      if (editingSlot === slotId) {
+        return `
+          <input id="edit-input" type="text" value="${escapeHtml(char.name)}"
+            data-color="${char.color}"
+            onkeydown="if(event.key==='Enter'){this.blur();}else if(event.key==='Escape'){this.dataset.cancel='1';this.blur();}"
+            onblur="if(this.dataset.cancel){cancelEdit();}else{saveRosterName(${slotId}, this.value, this.dataset.color);}"
+            style="font-size: 16px; font-weight: bold; padding: 4px 6px; border: 1px solid #4ECDC4; border-radius: 4px; width: 60%;">
+        `;
+      }
+      return `
+        <span class="character-name">${escapeHtml(char.name)}</span>
+        <button onclick="startEdit(${slotId})" title="名前を変更"
+          style="border: none; background: transparent; cursor: pointer; font-size: 13px; padding: 2px;">✏️</button>
+      `;
+    }
+
     function renderSlots() {
       const container = document.getElementById('slotsContainer');
+      const rosterSlots = state.roster || [];
       const slots = Array.from({ length: 6 }, (_, i) => i + 1);
 
       container.innerHTML = slots.map(slotId => {
+        const char = rosterSlots.find(r => r.id === slotId) || { id: slotId, name: `スロット ${slotId}`, color: '#999' };
         const session = Object.values(state.sessions || {}).find(s => s.slot_id === slotId);
 
         if (!session) {
           return `
-            <div class="slot-card slot-empty">
-              スロット ${slotId}
+            <div class="slot-card slot-empty" style="flex-direction: column; align-items: stretch; min-height: 120px; justify-content: flex-start;">
+              <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                <span class="character-badge" style="background-color: ${char.color}; width: 28px; height: 28px;"></span>
+                ${nameBlock(slotId, char)}
+              </div>
+              <div style="color: #bbb; font-size: 12px; text-align: center; margin-top: 20px;">空き</div>
             </div>
           `;
         }
@@ -444,12 +555,12 @@
 
         return `
           <div class="slot-card">
-            <div style="margin-bottom: 12px;">
+            <div style="margin-bottom: 12px; display: flex; align-items: center;">
               <span class="character-badge" style="background-color: ${session.color}"></span>
-              <span class="character-name">${session.character_name}</span>
+              ${nameBlock(slotId, char)}
             </div>
             <div class="session-info">
-              📁 ${session.cwd ? session.cwd.split('/').pop() : 'unknown'}<br>
+              ${session.model_name ? `🤖 ${session.model_name}<br>` : ''}📁 ${session.cwd ? session.cwd.split('/').pop() : 'unknown'}<br>
               🔗 ${session.session_id.substring(0, 8)}
             </div>
             <div class="status-badge ${statusInfo.class}">
@@ -458,12 +569,82 @@
             <div class="activity-text">
               ${session.detail || 'アクティビティなし'}
             </div>
-            <div class="elapsed-time">
-              ⏱️ ${formatTime(elapsedMs)}
+            <div class="elapsed-time" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>⏱️ ${formatTime(elapsedMs)}</span>
+              <div>
+                <button onclick="resetTimer('${session.session_id}')" style="padding: 4px 8px; font-size: 11px; border: none; background: #ddd; border-radius: 4px; cursor: pointer;">⟲ リセット</button>
+                <button onclick="clearSession('${session.session_id}')" style="padding: 4px 8px; font-size: 11px; border: none; background: #f0d0d0; border-radius: 4px; cursor: pointer;">✕ 消す</button>
+              </div>
             </div>
           </div>
         `;
       }).join('');
+    }
+
+    async function clearSession(sessionId) {
+      try {
+        await fetch(`http://${window.location.hostname}:4317/api/sessions/${sessionId}`, { method: 'DELETE' });
+        render();
+      } catch (error) {
+        console.error('Error clearing session:', error);
+      }
+    }
+
+    async function clearAllSessions() {
+      try {
+        await fetch(`http://${window.location.hostname}:4317/api/sessions/clear`, { method: 'POST' });
+        render();
+      } catch (error) {
+        console.error('Error clearing all sessions:', error);
+      }
+    }
+
+    // --- 接続モーダル ---
+    function openConnectModal() {
+      document.getElementById('connectModal').style.display = 'flex';
+      const other = document.getElementById('connectModelOther');
+      other.style.display = 'none';
+      const sel = document.getElementById('connectModel');
+      sel.onchange = () => {
+        other.style.display = sel.value === '__other__' ? 'block' : 'none';
+      };
+    }
+
+    function closeConnectModal() {
+      document.getElementById('connectModal').style.display = 'none';
+    }
+
+    async function submitConnect() {
+      const sel = document.getElementById('connectModel');
+      let modelName = sel.value;
+      if (modelName === '__other__') {
+        modelName = document.getElementById('connectModelOther').value.trim() || 'AI';
+      }
+      const label = document.getElementById('connectLabel').value.trim() || modelName;
+      const sessionId = 'ui-' + Date.now();
+
+      try {
+        await fetch(`http://${window.location.hostname}:4317/api/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            adapter: 'manual',
+            session_id: sessionId,
+            cwd: '/' + label,
+            kind: 'start',
+            model_name: modelName,
+            detail: '接続しました',
+            ts: Math.floor(Date.now() / 1000)
+          })
+        });
+        closeConnectModal();
+        // 入力をリセット
+        document.getElementById('connectLabel').value = '';
+        document.getElementById('connectModelOther').value = '';
+        render();
+      } catch (error) {
+        console.error('Error connecting:', error);
+      }
     }
 
     function renderQueue() {

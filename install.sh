@@ -29,26 +29,24 @@ if [ ! -f "$SETTINGS_LOCAL" ]; then
   echo '{}' > "$SETTINGS_LOCAL"
 fi
 
-# Helper function to set hook
-set_hook() {
-  local hook_name="$1"
-  local script_path="$2"
-
-  # Use jq to safely update the JSON
-  jq \
-    --arg hook "$hook_name" \
-    --arg path "$script_path" \
-    '.hooks[$hook] = {command: $path, shell: "bash"}' \
-    "$SETTINGS_LOCAL" > "$SETTINGS_LOCAL.tmp" && mv "$SETTINGS_LOCAL.tmp" "$SETTINGS_LOCAL"
-}
-
-# Register hooks
+# Register hooks using the correct Claude Code format:
+#   "HookEvent": [ { "matcher": "...", "hooks": [ { "type": "command", "command": "..." } ] } ]
+# SessionStart / Notification / Stop take no matcher; PreToolUse / PostToolUse match all tools.
 echo "Registering hooks..."
-set_hook "SessionStart" "$HOOKS_DIR/hook-start.sh"
-set_hook "PreToolUse" "$HOOKS_DIR/hook-pre-tool-use.sh"
-set_hook "PostToolUse" "$HOOKS_DIR/hook-post-tool-use.sh"
-set_hook "Notification" "$HOOKS_DIR/hook-notification.sh"
-set_hook "Stop" "$HOOKS_DIR/hook-stop.sh"
+jq \
+  --arg start "$HOOKS_DIR/hook-start.sh" \
+  --arg pre "$HOOKS_DIR/hook-pre-tool-use.sh" \
+  --arg post "$HOOKS_DIR/hook-post-tool-use.sh" \
+  --arg notif "$HOOKS_DIR/hook-notification.sh" \
+  --arg stop "$HOOKS_DIR/hook-stop.sh" \
+  '.hooks = {
+    SessionStart: [ { hooks: [ { type: "command", command: $start } ] } ],
+    PreToolUse:   [ { matcher: "", hooks: [ { type: "command", command: $pre } ] } ],
+    PostToolUse:  [ { matcher: "", hooks: [ { type: "command", command: $post } ] } ],
+    Notification: [ { hooks: [ { type: "command", command: $notif } ] } ],
+    Stop:         [ { hooks: [ { type: "command", command: $stop } ] } ]
+  }' \
+  "$SETTINGS_LOCAL" > "$SETTINGS_LOCAL.tmp" && mv "$SETTINGS_LOCAL.tmp" "$SETTINGS_LOCAL"
 
 echo "✓ anima hooks installed successfully"
 echo ""

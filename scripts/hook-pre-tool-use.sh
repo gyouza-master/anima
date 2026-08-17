@@ -28,6 +28,19 @@ fi
 
 cwd=$(pwd)
 
+# Log activity before handling
+curl -s -X POST "http://${ANIMA_HOST}:${ANIMA_PORT}/api/events" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"adapter\": \"claude-code\",
+    \"session_id\": \"$session_id\",
+    \"cwd\": \"$cwd\",
+    \"kind\": \"activity\",
+    \"status\": \"working\",
+    \"detail\": \"$tool_name starting\",
+    \"ts\": $(date +%s)
+  }" > /dev/null 2>&1
+
 # Handle Bash tool - request approval
 if [ "$tool_name" = "Bash" ]; then
   # Send approval request and wait for decision

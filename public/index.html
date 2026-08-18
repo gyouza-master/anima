@@ -65,8 +65,11 @@
   .sphere svg { width:100%; height:100%; display:block; }
   .empty-hint { color:#3F4C61; font-size:13px; text-align:center; }
 
-  .card { width:290px; background:#0B111C; border:1px solid #1A2231; border-radius:16px; padding:16px 15px 14px;
+  .card { position:relative; width:290px; background:#0B111C; border:1px solid #1A2231; border-radius:16px; padding:16px 15px 14px;
           display:flex; flex-direction:column; align-items:center; transition:border-color .2s; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+  .close { position:absolute; top:10px; right:10px; width:22px; height:22px; display:flex; align-items:center; justify-content:center;
+           font-size:11px; border:1px solid #212B3D; background:#0B111C; color:#5B6B84; border-radius:7px; cursor:pointer; z-index:2; }
+  .close:hover { color:#FCA5A5; border-color:#4B2026; }
   .card.attn { animation:attnGlow 1.6s ease-in-out infinite; border-color:#7A5E1F; }
   .avwrap { position:relative; width:72px; height:72px; }
   .av { width:72px; height:72px; display:flex; align-items:center; justify-content:center; }
@@ -248,13 +251,12 @@ function ensureCard(sid) {
   const st = el('div', 'st');
   const notice = el('div', '', 'width:100%');
   const row = el('div', 'row');
-  const reset = el('button', 'mini'); reset.textContent = '⟲'; reset.title = 'タイマーをリセット';
   const jump = el('button', 'mini jump'); jump.textContent = '↗︎ タブ'; jump.title = 'タブへジャンプ';
-  const kill = el('button', 'mini'); kill.textContent = '✕'; kill.title = 'スロットから外す';
-  row.appendChild(reset); row.appendChild(jump); row.appendChild(kill);
+  row.appendChild(jump);
+  const close = el('button', 'close'); close.textContent = '✕'; close.title = 'スロットから外す';
   panel.appendChild(tk); panel.appendChild(st); panel.appendChild(notice); panel.appendChild(row);
-  [avwrap, nm, model, panel].forEach(n => card.appendChild(n));
-  cardEls[sid] = { card, av, ring, nm, model, panel, tk, st, notice, row, reset, jump, kill };
+  [avwrap, nm, model, panel, close].forEach(n => card.appendChild(n));
+  cardEls[sid] = { card, av, ring, nm, model, panel, tk, st, notice, row, jump, close };
   return cardEls[sid];
 }
 
@@ -312,13 +314,11 @@ function renderCards() {
 
     renderNotice(e.notice, s, appr, r);
 
-    e.kill.onclick = () => clearSession(s.session_id);
-    if (s.browser) {
-      e.reset.style.display = 'none';
-      e.jump.style.display = ''; e.jump.onclick = () => jumpToTab(s.url);
+    e.close.onclick = () => clearSession(s.session_id);
+    if (s.browser) {                                 // ブラウザは「タブへジャンプ」、ネイティブは下ボタン無し
+      e.row.style.display = ''; e.jump.onclick = () => jumpToTab(s.url);
     } else {
-      e.reset.style.display = ''; e.reset.onclick = () => resetTimer(s.session_id);
-      e.jump.style.display = 'none';
+      e.row.style.display = 'none';
     }
   });
 }
@@ -478,6 +478,23 @@ function fireBeams() {
   }
 }
 
+// 1秒ごとの軽量更新（経過時間と時計だけ。全再描画しないので光線が途切れない）
+function tick() {
+  const clk = document.getElementById('clock'); if (clk) clk.textContent = new Date().toLocaleTimeString('ja-JP');
+  activeSessions().forEach(s => {
+    const e = cardEls[s.session_id]; if (!e) return;
+    const st = STATUS[s.status] || STATUS.idle;
+    let label = st.label, color = st.color;
+    if (s.browser) {
+      if (s.status === 'working') label = '● 生成中';
+      else if (s.status === 'awaiting-input') { label = '✅ 確認してね'; color = '#FBBF24'; }
+      else if (s.status === 'idle' || s.status === 'done') label = '🌐 表示中';
+    }
+    e.st.style.color = color;
+    e.st.textContent = `${label} ${fmt(Date.now() - (s.status_changed_at || Date.now()))}`;
+  });
+}
+
 function renderCounts() {
   const c = { working:0, 'awaiting-approval':0, 'awaiting-input':0, idle:0, done:0, error:0 };
   Object.values(state.sessions || {}).forEach(s => { if (c[s.status] != null) c[s.status]++; });
@@ -581,7 +598,7 @@ window.addEventListener('resize', () => { lastWireSig = ''; renderWires(); });
 renderCore();
 render();
 connectWS();
-setInterval(() => { if (editingTask === null) render(); }, 1000);
+setInterval(() => { if (editingTask === null) tick(); }, 1000);
 fireBeams();
 </script>
 </body>

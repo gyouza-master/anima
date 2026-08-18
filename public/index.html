@@ -26,21 +26,7 @@
   @keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)}      50%{transform:translate(180px,120px) scale(1.28)} }
   @keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)}      50%{transform:translate(-160px,110px) scale(1.22)} }
   @keyframes drift3 { 0%,100%{transform:translate(0,0) scale(1.12)}   50%{transform:translate(140px,-130px) scale(.86)} }
-  /* 丸いネオンがポワポワ漂う（中央帯の前面レイヤー・クリック透過） */
-  .orbfx { position:fixed; inset:0; z-index:6; pointer-events:none; overflow:hidden; }
-  .orb { position:absolute; border-radius:50%; will-change:transform,opacity; }
-  .o1 { width:16px; height:16px; left:27%; top:28%; background:#38BDF8; box-shadow:0 0 34px 11px rgba(56,189,248,.85);  animation:floatA 15s ease-in-out infinite,        glow 3.2s ease-in-out infinite; }
-  .o2 { width:12px; height:12px; left:73%; top:30%; background:#A78BFA; box-shadow:0 0 30px 10px rgba(167,139,250,.8);  animation:floatB 19s ease-in-out infinite,        glow 4.1s ease-in-out infinite .4s; }
-  .o3 { width:20px; height:20px; left:75%; top:70%; background:#F472B6; box-shadow:0 0 40px 12px rgba(244,114,182,.75); animation:floatC 22s ease-in-out infinite,        glow 3.7s ease-in-out infinite .8s; }
-  .o4 { width:12px; height:12px; left:25%; top:70%; background:#2DD4BF; box-shadow:0 0 28px 9px rgba(45,212,191,.8);    animation:floatB 17s ease-in-out infinite reverse, glow 2.9s ease-in-out infinite .2s; }
-  .o5 { width:14px; height:14px; left:46%; top:7%;  background:#60A5FA; box-shadow:0 0 32px 10px rgba(96,165,250,.8);   animation:floatA 21s ease-in-out infinite reverse, glow 4.4s ease-in-out infinite .6s; }
-  .o6 { width:12px; height:12px; left:57%; top:91%; background:#7DD3FC; box-shadow:0 0 28px 9px rgba(125,211,252,.8);   animation:floatC 18s ease-in-out infinite reverse, glow 3.4s ease-in-out infinite 1s; }
-  .o7 { width:13px; height:13px; left:30%; top:50%; background:#C084FC; box-shadow:0 0 30px 10px rgba(192,132,252,.78); animation:floatA 24s ease-in-out infinite,        glow 5s   ease-in-out infinite .3s; }
-  @keyframes floatA { 0%,100%{transform:translate(0,0)}   50%{transform:translate(60px,-70px)} }
-  @keyframes floatB { 0%,100%{transform:translate(0,0)}   50%{transform:translate(-70px,50px)} }
-  @keyframes floatC { 0%,100%{transform:translate(0,0)}   50%{transform:translate(50px,60px)} }
-  @keyframes glow    { 0%,100%{opacity:.3; filter:brightness(.9)} 50%{opacity:.95; filter:brightness(1.3)} }
-  @media (prefers-reduced-motion: reduce) { .blob, .orb { animation:none !important; } }
+  @media (prefers-reduced-motion: reduce) { .blob { animation:none !important; } }
   .mono { font-family:'IBM Plex Mono',Monaco,monospace; }
 
   @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
@@ -150,7 +136,6 @@
 <body>
 
 <div class="bg" aria-hidden="true"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div></div>
-<div class="orbfx" aria-hidden="true"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div><div class="orb o4"></div><div class="orb o5"></div><div class="orb o6"></div><div class="orb o7"></div></div>
 
 <div class="app">
   <div class="bar">
@@ -450,7 +435,7 @@ function renderCore() {
   const svg = document.createElementNS(NSVG, 'svg');
   svg.setAttribute('viewBox', '0 0 240 240');
   const add = (t, at) => { const n = document.createElementNS(NSVG, t); for (const k in at) n.setAttribute(k, at[k]); svg.appendChild(n); return n; };
-  add('circle', { cx:C, cy:C, r:R, fill:'rgba(8,22,44,.26)', stroke:'#1D5B8F', 'stroke-width':1, opacity:.8 });
+  add('circle', { cx:C, cy:C, r:R, fill:'rgba(8,22,44,.5)', stroke:'#1D5B8F', 'stroke-width':1, opacity:.8 });
   add('ellipse', { cx:C, cy:C, rx:R, ry:R * .34, fill:'none', stroke:'#17466E', 'stroke-width':.9 });
   add('ellipse', { cx:C, cy:C, rx:R * .34, ry:R, fill:'none', stroke:'#17466E', 'stroke-width':.9 });
   edges.forEach(([a, b]) => add('line', { x1:a.x, y1:a.y, x2:b.x, y2:b.y, stroke:'#2E7BB8', 'stroke-width':.5, opacity:.5 }));

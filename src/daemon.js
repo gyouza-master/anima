@@ -335,9 +335,17 @@ async function pollBrowserTabs() {
     for (const s of targets) {
       const r = await probeBrowserTab(s.url);
       if (!r || r.err || typeof r.len !== 'number') continue;
-      // 生成中 = 停止ボタンあり、または前回ポーリングから会話テキストが増えた（ストリーミング）
-      const grew = s._len !== undefined && r.len > s._len;
-      const now = r.stop === true || grew;
+      // 主信号 = busy（送信ボタンが無効 or stop ボタン）。思考ポーズを跨いで
+      // 安定するので、これが true の間は「生成中」。補助として会話テキストが
+      // 過去最大を超えて伸びた場合も動きありとみなす（点滅等では誤爆しない）。
+      const grew = typeof s._maxLen === 'number' && r.len > s._maxLen;
+      s._maxLen = Math.max(s._maxLen || 0, r.len);
+      const active = r.busy === true || grew;
+      if (active) s._lastActive = Date.now();
+      // busy が true の間は無条件で生成中。busy が落ちた後は、バースト配信の
+      // 小さなギャップを吸収するため DONE_DELAY_MS だけ猶予してから「完了」。
+      const DONE_DELAY_MS = 2500;
+      const now = r.busy === true || (Date.now() - (s._lastActive || 0)) < DONE_DELAY_MS;
       const prev = s._gen === true;
       if (now && !prev) {
         s.status = 'working';

@@ -41,8 +41,33 @@ curl -s -X POST "http://${ANIMA_HOST}:${ANIMA_PORT}/api/events" \
     \"ts\": $(date +%s)
   }" > /dev/null 2>&1
 
-# Handle Bash tool - request approval
+# Decide whether this Bash command is "dangerous" enough to need approval.
+# Only matches in config/approval.json trigger an approval card; everything
+# else passes straight through. Safe commands (ls, curl, npm, git status…)
+# never interrupt you.
+needs_approval=0
 if [ "$tool_name" = "Bash" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  CONFIG_FILE="$SCRIPT_DIR/../config/approval.json"
+  cmd=$(echo "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
+
+  # Load dangerous patterns from config (fall back to a built-in list).
+  patterns=$(jq -r '.dangerous_patterns[]?' "$CONFIG_FILE" 2>/dev/null)
+  if [ -z "$patterns" ]; then
+    patterns=$'(^|[^a-zA-Z._-])rm([^a-zA-Z._-]|$)\n(^|[^a-zA-Z._-])sudo([^a-zA-Z._-]|$)\ngit[[:space:]]+push'
+  fi
+
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    if [[ "$cmd" =~ $p ]]; then
+      needs_approval=1
+      break
+    fi
+  done <<< "$patterns"
+fi
+
+# Handle dangerous Bash tool - request approval
+if [ "$tool_name" = "Bash" ] && [ "$needs_approval" = "1" ]; then
   # Send approval request and wait for decision
   response=$(curl -s -X POST "http://${ANIMA_HOST}:${ANIMA_PORT}/api/approvals" \
     -H "Content-Type: application/json" \

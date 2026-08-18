@@ -306,6 +306,120 @@
       50% { transform: scale(1.08); opacity: 0.7; }
     }
 
+    /* --- 吹き出し（判断待ち） --- */
+    .bubble {
+      position: relative;
+      margin: 0 auto 14px;
+      max-width: 240px;
+      background: #fff;
+      border: 2px solid #FF9800;
+      border-radius: 12px;
+      padding: 12px 12px 10px;
+      box-shadow: 0 6px 18px rgba(255, 152, 0, 0.28);
+      text-align: left;
+      /* No entry/loop animation here: the slot list re-renders every second to
+         refresh timers, which would restart a CSS animation each time and make
+         an opacity-based one flicker to invisible. Keep the bubble static. */
+    }
+
+    .bubble::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      bottom: -11px;
+      transform: translateX(-50%);
+      border-width: 11px 9px 0 9px;
+      border-style: solid;
+      border-color: #FF9800 transparent transparent transparent;
+    }
+
+    .bubble::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      bottom: -8px;
+      transform: translateX(-50%);
+      border-width: 9px 7px 0 7px;
+      border-style: solid;
+      border-color: #fff transparent transparent transparent;
+      z-index: 1;
+    }
+
+    .bubble-input {
+      border-color: #2196F3;
+      box-shadow: 0 6px 18px rgba(33, 150, 243, 0.28);
+    }
+    .bubble-input::after { border-top-color: #2196F3; }
+
+    @keyframes bubble-pop {
+      0% { transform: scale(0.7); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes bubble-attention {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    .bubble-msg {
+      font-size: 13px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 6px;
+    }
+    .bubble-cmd {
+      font-family: 'Monaco', monospace;
+      font-size: 11px;
+      color: #b45309;
+      background: #fff7ed;
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-bottom: 10px;
+      max-height: 54px;
+      overflow: hidden;
+      word-break: break-all;
+      white-space: pre-wrap;
+    }
+    .bubble-buttons { display: flex; gap: 8px; margin-bottom: 6px; }
+    .bubble-btn {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 13px;
+      cursor: pointer;
+      transition: filter 0.15s;
+    }
+    .bubble-btn:hover { filter: brightness(1.08); }
+    .bubble-btn-allow { background: #4CAF50; color: #fff; }
+    .bubble-btn-deny { background: #f44336; color: #fff; }
+    .bubble-detail {
+      display: block;
+      width: 100%;
+      background: none;
+      border: none;
+      color: #2563eb;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 4px;
+      text-align: center;
+    }
+    .bubble-detail:hover { text-decoration: underline; }
+
+    /* --- 詳細モーダル --- */
+    .detail-row { margin-bottom: 12px; }
+    .detail-label { font-size: 11px; color: #999; margin-bottom: 3px; }
+    .detail-value {
+      font-family: 'Monaco', monospace;
+      font-size: 13px;
+      color: #333;
+      background: #f7f7f7;
+      border-radius: 6px;
+      padding: 8px 10px;
+      word-break: break-all;
+      white-space: pre-wrap;
+    }
+
     .char-name {
       font-weight: bold;
       font-size: 16px;
@@ -376,8 +490,20 @@
       </div>
     </div>
 
+    <!-- 判断内容の詳細モーダル -->
+    <div id="detailModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;">
+      <div style="background: white; border-radius: 12px; padding: 28px; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h2 id="detailTitle" style="color: #333; font-size: 18px;">判断内容の詳細</h2>
+          <button onclick="closeDetail()" style="padding: 6px 12px; font-size: 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer;">✕ 閉じる</button>
+        </div>
+        <div id="detailBody"></div>
+        <div id="detailActions" style="display: flex; gap: 12px; margin-top: 20px;"></div>
+      </div>
+    </div>
+
     <section id="approvalsSection" class="approvals-section" style="display: none;">
-      <h2 style="margin-bottom: 20px; color: #c00;">🔔 承認待ち</h2>
+      <h2 style="margin-bottom: 20px; color: #c00;">🔔 承認待ち（スロット外）</h2>
       <div id="approvalsContainer"></div>
     </section>
 
@@ -474,10 +600,30 @@
       }
     }, 1000);
 
+    // 承認 → 表示カード（session）の対応。フックは UUID キー、カードは
+    // pid-*/ui-* キーのことがあるので card_session_id を優先して突き合わせる。
+    function approvalForSession(sessionId) {
+      return Object.values(state.pendingApprovals || {})
+        .find(a => (a.card_session_id || a.session_id) === sessionId);
+    }
+
+    // Bash コマンド等、判断対象の中身を短く取り出す
+    function approvalSummary(approval) {
+      const ti = approval.tool_input || {};
+      if (typeof ti.command === 'string') return ti.command;
+      return JSON.stringify(ti);
+    }
+
     function renderApprovals() {
       const container = document.getElementById('approvalsContainer');
       const section = document.getElementById('approvalsSection');
-      const approvals = Object.values(state.pendingApprovals || {});
+      // スロットに出ている承認は各キャラの吹き出しで扱うので、ここには
+      // カードが存在しない「スロット外」の承認だけをフォールバック表示する。
+      const shownIds = new Set(
+        Object.values(state.sessions || {}).map(s => s.session_id)
+      );
+      const approvals = Object.values(state.pendingApprovals || {})
+        .filter(a => !shownIds.has(a.card_session_id || a.session_id));
 
       if (approvals.length === 0) {
         section.style.display = 'none';
@@ -521,6 +667,50 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    // 判断内容の詳細モーダル
+    function openDetail(approvalId) {
+      const approval = (state.pendingApprovals || {})[approvalId];
+      if (!approval) return;
+      const session = state.sessions[approval.card_session_id] ||
+        state.sessions[approval.session_id] || {};
+      const elapsed = formatTime(Date.now() - (approval.created_at || Date.now()));
+      const cwd = approval.cwd || session.cwd || '-';
+
+      document.getElementById('detailTitle').textContent =
+        `${session.character_name || 'AI'} の判断待ち`;
+      document.getElementById('detailBody').innerHTML = `
+        <div class="detail-row">
+          <div class="detail-label">キャラクター / AI</div>
+          <div class="detail-value">${escapeHtml(session.character_name || '-')}${session.model_name ? ' · ' + escapeHtml(session.model_name) : ''}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">ツール</div>
+          <div class="detail-value">🔧 ${escapeHtml(approval.tool_name || '-')}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">内容</div>
+          <div class="detail-value">${escapeHtml(approvalSummary(approval))}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">作業ディレクトリ</div>
+          <div class="detail-value">${escapeHtml(cwd)}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">経過</div>
+          <div class="detail-value">⏱️ ${elapsed}</div>
+        </div>
+      `;
+      document.getElementById('detailActions').innerHTML = `
+        <button class="bubble-btn bubble-btn-allow" style="flex:1;padding:12px;" onclick="makeDecision('${approval.id}', 'allow'); closeDetail();">✓ 許可</button>
+        <button class="bubble-btn bubble-btn-deny" style="flex:1;padding:12px;" onclick="makeDecision('${approval.id}', 'deny'); closeDetail();">✕ 拒否</button>
+      `;
+      document.getElementById('detailModal').style.display = 'flex';
+    }
+
+    function closeDetail() {
+      document.getElementById('detailModal').style.display = 'none';
     }
 
     async function makeDecision(approvalId, decision) {
@@ -638,14 +828,39 @@
         const svg = window.avatarSvg(look, toAvatarState(session.status), 72);
         const timerLabel = session.status === 'idle' ? '返信待ち ' : working ? '作業中 ' : '';
 
+        // 判断が必要なとき、キャラの上に吹き出しを出す
+        const approval = approvalForSession(session.session_id);
+        let bubble = '';
+        if (approval) {
+          bubble = `
+            <div class="bubble">
+              <div class="bubble-msg">${escapeHtml(char.name)}が判断を待ってます 🔧 ${escapeHtml(approval.tool_name || '')}</div>
+              <div class="bubble-cmd">${escapeHtml(approvalSummary(approval))}</div>
+              <div class="bubble-buttons">
+                <button class="bubble-btn bubble-btn-allow" onclick="makeDecision('${approval.id}', 'allow')">✓ 許可</button>
+                <button class="bubble-btn bubble-btn-deny" onclick="makeDecision('${approval.id}', 'deny')">✕ 拒否</button>
+              </div>
+              <button class="bubble-detail" onclick="openDetail('${approval.id}')">詳細を見る ›</button>
+            </div>
+          `;
+        } else if (session.status === 'awaiting-input') {
+          bubble = `
+            <div class="bubble bubble-input">
+              <div class="bubble-msg">${escapeHtml(char.name)}が入力を待ってます 💬</div>
+              <div class="bubble-cmd">${escapeHtml(session.detail || '入力待ち')}</div>
+            </div>
+          `;
+        }
+
         return `
           <div class="slot-card">
+            ${bubble}
             <div class="avatar ${working ? 'avatar-working' : ''}">${svg}</div>
             <div class="char-name">${escapeHtml(char.name)}</div>
             <div class="char-model">${session.model_name ? '🤖 ' + escapeHtml(session.model_name) : ''}</div>
             ${taskBlock(session)}
             <div class="status-badge ${statusInfo.class}" style="margin-top:10px;">${statusInfo.badge}</div>
-            <div class="activity-text">${session.detail ? escapeHtml(session.detail) : 'アクティビティなし'}</div>
+            ${bubble ? '' : `<div class="activity-text">${session.detail ? escapeHtml(session.detail) : 'アクティビティなし'}</div>`}
             <div class="session-info" style="margin-bottom:6px;">📁 ${session.cwd ? escapeHtml(session.cwd.split('/').pop()) : 'unknown'} · 🔗 ${escapeHtml(session.session_id.substring(0, 8))}</div>
             <div class="elapsed-time" style="display:flex;justify-content:space-between;align-items:center;">
               <span>⏱️ ${timerLabel}${formatTime(elapsedMs)}</span>

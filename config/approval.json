@@ -8,6 +8,24 @@
       "enabled": true
     }
   ],
+  "_dangerous_patterns_note": "承認カードを出すBashコマンドの正規表現(ERE)。ここに一致したものだけ承認待ちになり、他は素通り。",
+  "dangerous_patterns": [
+    "(^|[^a-zA-Z._-])rm([^a-zA-Z._-]|$)",
+    "(^|[^a-zA-Z._-])sudo([^a-zA-Z._-]|$)",
+    "(^|[^a-zA-Z._-])dd([^a-zA-Z._-]|$)",
+    "(^|[^a-zA-Z._-])(kill|killall|pkill)([^a-zA-Z._-]|$)",
+    "(^|[^a-zA-Z._-])(shutdown|reboot|halt)([^a-zA-Z._-]|$)",
+    "(^|[^a-zA-Z._-])mkfs",
+    "(^|[^a-zA-Z._-])chmod[[:space:]]+-[a-zA-Z]*R",
+    "(^|[^a-zA-Z._-])chown[[:space:]]+-[a-zA-Z]*R",
+    "git[[:space:]]+push",
+    "git[[:space:]]+reset[[:space:]]+--hard",
+    "git[[:space:]]+clean",
+    "[|][[:space:]]*(sh|bash|zsh)([[:space:]]|$)",
+    "(curl|wget)[^|]*[|][[:space:]]*(sh|bash|zsh)",
+    "npm[[:space:]]+publish",
+    "[>][[:space:]]*/(etc|usr|bin|sbin|System|Library|Applications)"
+  ],
   "notification": {
     "use_osascript": true
   },

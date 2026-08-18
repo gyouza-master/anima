@@ -74,6 +74,19 @@ function assignSessionToSlot(sessionId, sessionData) {
   }
 }
 
+// Map an incoming event to the session card it belongs to.
+// Exact session_id wins. Otherwise fall back to a live session in the same cwd
+// (bridges hook UUIDs to "+接続"/UI cards). Returns the original id when there
+// is nothing to reconcile to — callers guard on state.sessions[sid].
+function resolveSessionId(sessionId, cwd, adapter) {
+  if (state.sessions[sessionId]) return sessionId;
+  if (cwd && cwd !== '/') {
+    const match = Object.keys(state.sessions).find(id => state.sessions[id].cwd === cwd);
+    if (match) return match;
+  }
+  return sessionId;
+}
+
 function processQueue() {
   while (state.queue.length > 0) {
     const availableSlot = getAvailableSlot();
@@ -290,33 +303,47 @@ app.post('/api/events', (req, res) => {
   //   - activity (AI ran a tool)    -> keep timer running (don't reset mid-work)
   //   - stop (AI finished replying)  -> reset timer; from here it counts how long
   //                                     the AI has been waiting for your reply
+  // Reconcile identity. Hooks key events by Claude's session UUID, but a card
+  // may have been created by "+接続" (keyed pid-*) or the UI (ui-*). When the
+  // exact id is unknown, route the event to an existing session in the same cwd
+  // so the card the user is actually watching updates. Timestamps are always
+  // stamped server-side in ms — hook `ts` is in seconds and would break the
+  // frontend's `Date.now() - status_changed_at` math.
+  const sid = resolveSessionId(session_id, cwd, adapter);
+
   if (kind === 'start') {
-    assignSessionToSlot(session_id, { session_id, cwd, adapter, model, model_name });
+    // Only create a new card if we can't reconcile to an existing one.
+    if (state.sessions[sid]) {
+      if (model) state.sessions[sid].model = model;
+      if (model_name) state.sessions[sid].model_name = model_name;
+    } else {
+      assignSessionToSlot(session_id, { session_id, cwd, adapter, model, model_name });
+    }
   } else if (kind === 'prompt') {
-    if (state.sessions[session_id]) {
-      state.sessions[session_id].status = 'working';
-      state.sessions[session_id].detail = 'あなたのメッセージを処理中';
-      state.sessions[session_id].status_changed_at = Date.now(); // reset on your send
+    if (state.sessions[sid]) {
+      state.sessions[sid].status = 'working';
+      state.sessions[sid].detail = 'あなたのメッセージを処理中';
+      state.sessions[sid].status_changed_at = Date.now(); // reset on your send
     }
   } else if (kind === 'activity') {
-    if (state.sessions[session_id]) {
-      state.sessions[session_id].status = status || 'working';
-      state.sessions[session_id].detail = detail;
+    if (state.sessions[sid]) {
+      state.sessions[sid].status = status || 'working';
+      state.sessions[sid].detail = detail;
       // Do NOT reset the timer here — the AI is mid-work, still your turn later.
-      if (model) state.sessions[session_id].model = model;
-      if (model_name) state.sessions[session_id].model_name = model_name;
+      if (model) state.sessions[sid].model = model;
+      if (model_name) state.sessions[sid].model_name = model_name;
     }
   } else if (kind === 'notification') {
-    if (state.sessions[session_id]) {
-      state.sessions[session_id].status = status || 'awaiting-input';
-      state.sessions[session_id].status_changed_at = ts || Date.now();
+    if (state.sessions[sid]) {
+      state.sessions[sid].status = status || 'awaiting-input';
+      state.sessions[sid].status_changed_at = Date.now();
     }
   } else if (kind === 'stop') {
-    if (state.sessions[session_id]) {
+    if (state.sessions[sid]) {
       // AI finished replying — now waiting for your reply. Start counting here.
-      state.sessions[session_id].status = 'idle';
-      state.sessions[session_id].detail = '返答完了・あなたの返信待ち';
-      state.sessions[session_id].status_changed_at = ts || Date.now();
+      state.sessions[sid].status = 'idle';
+      state.sessions[sid].detail = '返答完了・あなたの返信待ち';
+      state.sessions[sid].status_changed_at = Date.now();
     }
   }
 
@@ -325,6 +352,11 @@ app.post('/api/events', (req, res) => {
 
   res.json({ ok: true });
 });
+
+// Non-serializable per-approval handles (timers, the pending res callback).
+// Kept OUT of `state` so state can be JSON-serialized for /api/state and WS
+// broadcasts without hitting circular references.
+const approvalHandles = {};
 
 // Approval endpoint (long-polling)
 app.post('/api/approvals', (req, res) => {
@@ -338,17 +370,23 @@ app.post('/api/approvals', (req, res) => {
   const approvalId = `${session_id}-${Date.now()}`;
   const timeoutMs = timeout_ms || config.approval_timeout_ms;
 
+  // Resolve which visible card this belongs to (hooks key by UUID, cards may
+  // be keyed pid-*/ui-*). card_session_id lets the UI attach the speech bubble
+  // to the right character.
+  const sid = resolveSessionId(session_id, cwd, adapter);
+
   // Update session status
-  if (state.sessions[session_id]) {
-    state.sessions[session_id].status = 'awaiting-approval';
-    state.sessions[session_id].detail = `${tool_name}: ${JSON.stringify(tool_input).substring(0, 60)}...`;
-    state.sessions[session_id].status_changed_at = Date.now();
+  if (state.sessions[sid]) {
+    state.sessions[sid].status = 'awaiting-approval';
+    state.sessions[sid].detail = `${tool_name}: ${JSON.stringify(tool_input).substring(0, 60)}...`;
+    state.sessions[sid].status_changed_at = Date.now();
   }
 
   // Create approval object
   const approval = {
     id: approvalId,
     session_id,
+    card_session_id: sid,
     tool_name,
     tool_input,
     adapter,
@@ -370,7 +408,7 @@ app.post('/api/approvals', (req, res) => {
   });
 
   // Send macOS notification
-  const character = state.sessions[session_id]?.character_name || 'Unknown';
+  const character = state.sessions[sid]?.character_name || 'Unknown';
   sendNotification(
     'anima - 承認待ち',
     `${character}が承認を待っています`,
@@ -381,6 +419,7 @@ app.post('/api/approvals', (req, res) => {
   const timeoutHandle = setTimeout(() => {
     if (state.pendingApprovals[approvalId] && !state.pendingApprovals[approvalId].decided) {
       delete state.pendingApprovals[approvalId];
+      delete approvalHandles[approvalId];
       broadcastState();
 
       if (!res.headersSent) {
@@ -392,18 +431,6 @@ app.post('/api/approvals', (req, res) => {
     }
   }, timeoutMs);
 
-  // Store response handle so decision endpoint can clear it
-  approval.resHandle = timeoutHandle;
-  approval.responseCallback = () => {
-    clearTimeout(timeoutHandle);
-    if (!res.headersSent) {
-      res.json({
-        decision: approval.decision,
-        reason: approval.reason || ''
-      });
-    }
-  };
-
   // Keep connection alive with ping
   const pingInterval = setInterval(() => {
     if (!res.headersSent && res.socket?.writable) {
@@ -413,9 +440,28 @@ app.post('/api/approvals', (req, res) => {
     }
   }, 30000);
 
+  // Store handles OUT of state (non-serializable) so the decision endpoint can
+  // resolve the waiting request and clear timers.
+  approvalHandles[approvalId] = {
+    timeoutHandle,
+    pingInterval,
+    responseCallback: () => {
+      clearTimeout(timeoutHandle);
+      clearInterval(pingInterval);
+      if (!res.headersSent) {
+        const a = state.pendingApprovals[approvalId] || approval;
+        res.json({
+          decision: a.decision,
+          reason: a.reason || ''
+        });
+      }
+    }
+  };
+
   res.on('close', () => {
     clearInterval(pingInterval);
     clearTimeout(timeoutHandle);
+    delete approvalHandles[approvalId];
   });
 });
 
@@ -440,14 +486,15 @@ app.post('/api/approvals/:id/decision', (req, res) => {
     reason
   });
 
-  // Clear pending approval from state
+  // Resolve the waiting request BEFORE clearing so the callback can read the
+  // decision, then drop pending state + handles.
+  const handles = approvalHandles[approvalId];
+  if (handles && handles.responseCallback) {
+    handles.responseCallback();
+  }
+  delete approvalHandles[approvalId];
   delete state.pendingApprovals[approvalId];
   broadcastState();
-
-  // Resolve the waiting request
-  if (approval.responseCallback) {
-    approval.responseCallback();
-  }
 
   res.json({ ok: true });
 });

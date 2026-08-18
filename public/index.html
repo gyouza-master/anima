@@ -480,7 +480,7 @@
           <h2 style="color: #333;">稼働中の AI を選択</h2>
           <button onclick="refreshDiscover()" style="padding: 6px 12px; font-size: 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer;">🔄 更新</button>
         </div>
-        <p style="font-size: 12px; color: #999; margin-bottom: 16px;">今このMacで起動している Claude Code セッションの一覧です。</p>
+        <p style="font-size: 12px; color: #999; margin-bottom: 16px;">今このMacで動いている AI の一覧です。ネイティブ（Claude Code等）はライブ連携、ブラウザのAIは存在表示＋タブへジャンプ。</p>
 
         <div id="discoverList" style="margin-bottom: 20px;">
           <div style="color: #999; font-size: 13px; text-align: center; padding: 20px;">読み込み中...</div>
@@ -852,6 +852,25 @@
           `;
         }
 
+        // ブラウザタブAI（Tier2/3）は状態のライブ更新が無いので、専用の見た目に。
+        if (session.browser) {
+          return `
+            <div class="slot-card">
+              <div class="avatar" style="opacity:.9;">${svg}</div>
+              <div class="char-name">${escapeHtml(char.name)}</div>
+              <div class="char-model">${session.model_name ? '🌐 ' + escapeHtml(session.model_name) : '🌐 ブラウザ'}</div>
+              ${taskBlock(session)}
+              <div class="status-badge" style="margin-top:10px;background:#EEF2FF;color:#4338CA;">🌐 ブラウザで表示中</div>
+              <div class="activity-text">${session.detail ? escapeHtml(session.detail) : ''}</div>
+              <button data-url="${escapeHtml(session.url || '')}" onclick="jumpToTab(this.dataset.url)"
+                style="width:100%;margin:6px 0 8px;padding:9px;border:none;border-radius:6px;background:#4338CA;color:#fff;font-weight:bold;font-size:13px;cursor:pointer;">↗︎ タブへジャンプ</button>
+              <div style="display:flex;justify-content:flex-end;">
+                <button onclick="clearSession('${session.session_id}')" title="スロットから外す" style="padding:4px 8px;font-size:11px;border:none;background:#f0d0d0;border-radius:4px;cursor:pointer;">✕</button>
+              </div>
+            </div>
+          `;
+        }
+
         return `
           <div class="slot-card">
             ${bubble}
@@ -903,6 +922,7 @@
     }
 
     let discoveredSessions = [];
+    let discoveredTabs = [];
 
     async function refreshDiscover() {
       const list = document.getElementById('discoverList');
@@ -910,28 +930,40 @@
       try {
         const res = await fetch(`http://${window.location.hostname}:4317/api/discover`);
         const data = await res.json();
-        const sessions = data.sessions || [];
-        discoveredSessions = sessions;
+        discoveredSessions = data.sessions || [];
+        discoveredTabs = data.tabs || [];
 
-        if (sessions.length === 0) {
-          list.innerHTML = '<div style="color:#999;font-size:13px;text-align:center;padding:20px;">稼働中の Claude Code セッションが見つかりません</div>';
+        if (discoveredSessions.length === 0 && discoveredTabs.length === 0) {
+          list.innerHTML = '<div style="color:#999;font-size:13px;text-align:center;padding:20px;">稼働中の AI が見つかりません</div>';
           return;
         }
 
-        list.innerHTML = sessions.map((s, i) => {
-          const btn = s.connected
-            ? `<span style="padding:6px 14px;font-size:12px;color:#999;background:#f0f0f0;border-radius:6px;">接続済み</span>`
-            : `<button onclick="connectDiscoveredByIndex(${i})" style="padding:6px 14px;font-size:12px;border:none;background:#4ECDC4;color:white;font-weight:bold;border-radius:6px;cursor:pointer;">接続</button>`;
-          return `
+        const connectBtn = (onclick) =>
+          `<button onclick="${onclick}" style="padding:6px 14px;font-size:12px;border:none;background:#4ECDC4;color:white;font-weight:bold;border-radius:6px;cursor:pointer;">接続</button>`;
+        const doneBadge =
+          `<span style="padding:6px 14px;font-size:12px;color:#999;background:#f0f0f0;border-radius:6px;">接続済み</span>`;
+
+        const procHtml = discoveredSessions.map((s, i) => `
             <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid #eee;border-radius:8px;margin-bottom:8px;">
               <div>
                 <div style="font-weight:bold;color:#333;">📁 ${escapeHtml(s.project)}</div>
                 <div style="font-size:11px;color:#999;font-family:Monaco,monospace;">PID ${s.pid}${s.started ? ' · ' + escapeHtml(s.started) : ''}</div>
               </div>
-              ${btn}
-            </div>
-          `;
-        }).join('');
+              ${s.connected ? doneBadge : connectBtn(`connectDiscoveredByIndex(${i})`)}
+            </div>`).join('');
+
+        const tabsHtml = discoveredTabs.map((t, i) => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid #eee;border-radius:8px;margin-bottom:8px;">
+              <div style="min-width:0;">
+                <div style="font-weight:bold;color:#333;">🌐 ${escapeHtml(t.project)}</div>
+                <div style="font-size:11px;color:#999;font-family:Monaco,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;">${escapeHtml(t.ai_name)} · ${escapeHtml(t.url)}</div>
+              </div>
+              ${t.connected ? doneBadge : connectBtn(`connectTabByIndex(${i})`)}
+            </div>`).join('');
+
+        list.innerHTML =
+          (procHtml ? `<div style="font-size:11px;color:#999;margin:4px 0 8px;">🖥 ネイティブ（Claude Code等・ライブ連携）</div>${procHtml}` : '') +
+          (tabsHtml ? `<div style="font-size:11px;color:#999;margin:14px 0 8px;">🌐 ブラウザのAI（存在表示・タブへジャンプ）</div>${tabsHtml}` : '');
       } catch (error) {
         console.error('Error discovering sessions:', error);
         list.innerHTML = '<div style="color:#c00;font-size:13px;text-align:center;padding:20px;">検知に失敗しました</div>';
@@ -941,6 +973,11 @@
     function connectDiscoveredByIndex(i) {
       const s = discoveredSessions[i];
       if (s) connectDiscovered(s.session_id, s.cwd, s.project, s.ai_name);
+    }
+
+    function connectTabByIndex(i) {
+      const t = discoveredTabs[i];
+      if (t) connectBrowserTab(t);
     }
 
     async function connectDiscovered(sessionId, cwd, project, aiName) {
@@ -962,6 +999,42 @@
         render();
       } catch (error) {
         console.error('Error connecting:', error);
+      }
+    }
+
+    // ブラウザタブAIの接続（Tier2/3: ライブ状態は無し、タブへジャンプ可）
+    async function connectBrowserTab(tab) {
+      try {
+        await fetch(`http://${window.location.hostname}:4317/api/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            adapter: 'browser',
+            session_id: tab.session_id,
+            cwd: tab.url,          // URLをキーに（フックのcwd紐づけと衝突しない）
+            url: tab.url,
+            kind: 'start',
+            model_name: tab.ai_name || 'AI',
+            detail: 'ブラウザで開いています',
+            ts: Math.floor(Date.now() / 1000)
+          })
+        });
+        refreshDiscover();
+        render();
+      } catch (error) {
+        console.error('Error connecting tab:', error);
+      }
+    }
+
+    async function jumpToTab(url) {
+      try {
+        await fetch(`http://${window.location.hostname}:4317/api/tabs/activate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+      } catch (error) {
+        console.error('Error jumping to tab:', error);
       }
     }
 

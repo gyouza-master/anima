@@ -244,6 +244,71 @@ const KNOWN_AIS = [
   { name: 'Cursor', bin: 'Cursor', kind: 'app' }
 ];
 
+// ブラウザで動く AI（タブ）。ps では拾えないので Google Chrome を AppleScript で
+// 列挙して該当ホストのタブを検知する。フックが無いので状態のライブ更新はできない
+// （Tier 3: 存在表示＋タブへジャンプ）。
+const listTabsScript = join(__dirname, '../scripts/list-chrome-tabs.applescript');
+const activateTabScript = join(__dirname, '../scripts/activate-chrome-tab.applescript');
+const BROWSER_AIS = [
+  { host: 'claude.ai', name: 'Claude (ブラウザ)' },
+  { host: 'chatgpt.com', name: 'ChatGPT (ブラウザ)' },
+  { host: 'chat.openai.com', name: 'ChatGPT (ブラウザ)' },
+  { host: 'gemini.google.com', name: 'Gemini (ブラウザ)' }
+];
+
+// Stable id for a tab, derived from host+pathname (ignores query/hash) so the
+// same conversation keeps its card across reloads.
+function tabSessionId(url) {
+  let key = url;
+  try { const u = new URL(url); key = u.host + u.pathname; } catch { /* keep raw */ }
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (Math.imul(h, 31) + key.charCodeAt(i)) | 0;
+  return 'browser-' + (h >>> 0).toString(36);
+}
+
+function discoverBrowserTabs() {
+  const found = [];
+  let out = '';
+  try {
+    out = execSync(`osascript "${listTabsScript}"`, { encoding: 'utf-8', timeout: 5000 });
+  } catch {
+    return found; // Chrome not running / no automation permission
+  }
+  const US = String.fromCharCode(31);
+  const seen = new Set();
+  out.split('\n').forEach(line => {
+    if (!line) return;
+    const parts = line.split(US);
+    if (parts.length < 3) return;
+    const url = parts[2] || '';
+    const title = parts[3] || '';
+    const ai = BROWSER_AIS.find(a => url.includes('://' + a.host) || url.includes('.' + a.host));
+    if (!ai) return;
+    const sessionId = tabSessionId(url);
+    if (seen.has(sessionId)) return; // same conversation open in 2 windows -> once
+    seen.add(sessionId);
+    found.push({
+      session_id: sessionId,
+      ai_name: ai.name,
+      kind: 'browser',
+      url,
+      project: title || ai.name,
+      started: '',
+      connected: !!state.sessions[sessionId]
+    });
+  });
+  return found;
+}
+
+function activateBrowserTab(url) {
+  try {
+    execSync(`osascript "${activateTabScript}" ${JSON.stringify(url)}`, { timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Discover running AI sessions (Claude Code CLI, ChatGPT app, etc.).
 // Returns each process's pid, cwd, start time, AI name, and whether anima tracks it.
 app.get('/api/discover', (req, res) => {
@@ -284,6 +349,7 @@ app.get('/api/discover', (req, res) => {
         pid,
         session_id: sessionId,
         ai_name: ai.name,
+        kind: 'process',
         cwd,
         project,
         started,
@@ -293,7 +359,18 @@ app.get('/api/discover', (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: 'discover failed', detail: String(err) });
   }
-  res.json({ sessions: found });
+
+  // Also surface browser-tab AIs (claude.ai / ChatGPT web, etc.).
+  const tabs = discoverBrowserTabs();
+  res.json({ sessions: found, tabs });
+});
+
+// Bring a browser tab to the front (Tier 2/3 "タブへジャンプ").
+app.post('/api/tabs/activate', (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'url required' });
+  const ok = activateBrowserTab(url);
+  res.json({ ok });
 });
 
 // Get roster (slot names / colors)
@@ -354,7 +431,7 @@ app.post('/api/sessions/clear', (req, res) => {
 
 // Event endpoint
 app.post('/api/events', (req, res) => {
-  const { adapter, session_id, cwd, kind, status, detail, ts, model, model_name } = req.body;
+  const { adapter, session_id, cwd, kind, status, detail, ts, model, model_name, url } = req.body;
 
   if (!session_id) {
     return res.status(400).json({ error: 'session_id required' });
@@ -383,7 +460,10 @@ app.post('/api/events', (req, res) => {
       if (model) state.sessions[sid].model = model;
       if (model_name) state.sessions[sid].model_name = model_name;
     } else {
-      assignSessionToSlot(session_id, { session_id, cwd, adapter, model, model_name });
+      // Browser-tab AIs (adapter 'browser') are Tier-2/3: no hooks, so no live
+      // status — carry the tab URL so the card can offer "タブへジャンプ".
+      const extra = adapter === 'browser' ? { url, browser: true } : {};
+      assignSessionToSlot(session_id, { session_id, cwd, adapter, model, model_name, ...extra });
     }
   } else if (kind === 'prompt') {
     if (state.sessions[sid]) {

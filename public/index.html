@@ -16,8 +16,9 @@
   @keyframes pulseRing { 0%,100%{transform:scale(1);opacity:.55} 50%{transform:scale(1.14);opacity:.12} }
   @keyframes caret { 0%,49%{opacity:1} 50%,100%{opacity:0} }
   @keyframes attnGlow { 0%,100%{box-shadow:0 0 0 1px #48381A,0 0 22px rgba(251,191,36,.10)} 50%{box-shadow:0 0 0 1px #7A5E1F,0 0 30px rgba(251,191,36,.28)} }
+  @keyframes dashRun { from { stroke-dashoffset:0; } to { stroke-dashoffset:var(--dash-to); } }
+  @keyframes spin { to { transform:rotate(360deg); } }
 
-  /* ---- 全幅レイアウト ---- */
   .app { width:100%; min-height:100vh; display:flex; flex-direction:column; }
   .bar { display:flex; align-items:center; justify-content:space-between; padding:14px 26px; border-bottom:1px solid #161E2C; background:#0A0F1A; }
   .brand { display:flex; align-items:center; gap:11px; }
@@ -37,21 +38,26 @@
   .strip .label { font-size:11px; letter-spacing:.16em; color:#3F7EA8; }
   .counts { display:flex; gap:16px; font-size:12.5px; font-weight:600; }
 
-  /* ---- キャラのグリッド（全幅・全員表示） ---- */
-  .grid { flex:1; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:18px; padding:22px 26px; align-content:start; }
+  /* 左=稼働カード / 右=球体 */
+  .stage { flex:1; display:flex; gap:26px; padding:24px 26px; align-items:stretch; }
+  .left { flex:1; min-width:0; }
+  .empty-hint { color:#3F4C61; font-size:13px; padding:40px 0; text-align:center; }
+  .grid { display:grid; gap:18px; justify-content:start; align-content:start; }
+
+  .right { width:46%; max-width:600px; min-width:340px; display:flex; align-items:center; justify-content:center; position:relative; }
+  .glow { position:absolute; width:74%; aspect-ratio:1; border-radius:50%;
+          background:radial-gradient(circle at 50% 50%, rgba(56,189,248,.12), rgba(6,9,15,0) 68%); }
+  .sphere { width:min(46vw,520px); aspect-ratio:1; position:relative; z-index:1; }
+  .sphere svg { width:100%; height:100%; display:block; }
 
   .card { background:#0B111C; border:1px solid #1A2231; border-radius:16px; padding:18px 16px 16px;
           display:flex; flex-direction:column; align-items:center; transition:border-color .2s; }
-  .card.empty { border-style:dashed; border-color:#1A2231; background:#080C14; }
   .card.attn { animation:attnGlow 1.6s ease-in-out infinite; border-color:#7A5E1F; }
-
   .avwrap { position:relative; width:78px; height:78px; }
   .av { width:78px; height:78px; display:flex; align-items:center; justify-content:center; }
   .ring { position:absolute; inset:-8px; border-radius:50%; border:2px solid #FBBF24; animation:pulseRing 1.3s ease-in-out infinite; display:none; }
   .nm { font-size:15px; font-weight:700; margin-top:6px; }
   .model { font-size:10.5px; color:#4E5D75; margin-top:1px; min-height:13px; }
-
-  /* 名前の下のカード（情報パネル） */
   .panel { width:100%; margin-top:12px; background:#0A1220; border:1px solid #16202E; border-radius:12px; padding:12px; }
   .tk { font-size:12.5px; font-weight:500; text-align:center; cursor:pointer; padding:3px 4px; border-radius:6px; }
   .tk:hover { background:#0E1524; }
@@ -62,10 +68,7 @@
   .mini:hover { color:#C3D0E2; border-color:#33415C; }
   .mini.jump { color:#93C5FD; border-color:#1E3A55; }
   .mini.jump:hover { color:#DBEAFE; border-color:#2E5680; }
-  .assign { font-size:12px; font-family:'IBM Plex Mono',monospace; color:#38BDF8; border:1px dashed #1B3F55;
-            background:transparent; padding:7px 14px; border-radius:8px; cursor:pointer; margin-top:12px; }
 
-  /* パネル内のお知らせ（判断待ち / 入力待ち / 確認してね） */
   .notice { width:100%; margin-top:10px; border-radius:10px; padding:11px; text-align:left; }
   .notice.appr { background:#12111A; border:1px solid #48381A; }
   .notice.inp  { background:#0B1523; border:1px solid #1E3A55; }
@@ -79,6 +82,15 @@
   .deny  { flex:1; font-size:12px; font-weight:700; border:1px solid #4B2026; border-radius:7px; padding:7px; background:#2A1417; color:#FCA5A5; cursor:pointer; }
   .more  { display:block; width:100%; margin-top:7px; background:none; border:none; color:#8494AC; font-size:11px; cursor:pointer; }
   .more:hover { color:#C3D0E2; }
+
+  /* 待機室（稼働していないキャラ） */
+  .lounge { padding:22px 26px 26px; border-top:1px solid #161E2C; background:#080C14; }
+  .lounge > .label { font-size:11px; letter-spacing:.16em; color:#3F7EA8; margin-bottom:16px; }
+  .lounge-row { display:flex; flex-wrap:wrap; gap:26px; }
+  .rest { display:flex; flex-direction:column; align-items:center; gap:5px; width:96px; }
+  .rest .rav { width:58px; height:58px; display:flex; align-items:center; justify-content:center; opacity:.5; }
+  .rest .rnm { font-size:12px; color:#5B6B84; font-weight:600; }
+  .rest .rst { font-size:10px; color:#3F4C61; }
 
   .queue { display:flex; align-items:center; gap:14px; padding:13px 26px; border-top:1px solid #161E2C; background:#0A0F1A; }
   .queue .label { font-size:11px; letter-spacing:.08em; color:#4E5D75; }
@@ -125,7 +137,21 @@
     <div class="mono" style="font-size:11px;color:#4E5D75;" id="clock"></div>
   </div>
 
-  <div class="grid" id="grid"></div>
+  <div class="stage">
+    <div class="left">
+      <div class="grid" id="grid"></div>
+      <div class="empty-hint" id="emptyHint" style="display:none">まだ稼働中の AI はいません。「＋ 接続」から追加してください。</div>
+    </div>
+    <div class="right">
+      <div class="glow"></div>
+      <div class="sphere" id="sphere"></div>
+    </div>
+  </div>
+
+  <div class="lounge">
+    <div class="label">待機室</div>
+    <div class="lounge-row" id="lounge"></div>
+  </div>
 
   <div class="queue">
     <div class="label">待機キュー</div>
@@ -180,15 +206,38 @@ function rosterOf(id) {
   return (state.roster || []).find(r => r.id === id) ||
     { id, name:`スロット ${id}`, color:'#4E5D75', body:'slim', deco:'none', visor:'band', mark:'bar' };
 }
-const sessionOfSlot = id => Object.values(state.sessions || {}).find(s => s.slot_id === id);
 function approvalOfSession(sid) {
   return Object.values(state.pendingApprovals || {}).find(a => (a.card_session_id || a.session_id) === sid);
 }
 const cmdOf = a => { const ti = (a && a.tool_input) || {}; return typeof ti.command === 'string' ? ti.command : JSON.stringify(ti); };
+// 稼働中（スロットに着任している）セッションを slot_id 順に
+const activeSessions = () => Object.values(state.sessions || {}).filter(s => s.slot_id).sort((a, b) => a.slot_id - b.slot_id);
 
-/* ---------- カード（DOMは一度だけ生成、以後は更新のみ） ---------- */
-function ensureCard(id) {
-  if (cardEls[id]) return cardEls[id];
+function render() { renderCards(); renderLounge(); renderCounts(); renderQueue(); }
+
+/* ---------- 待機室（スロットに着任していないキャラ） ---------- */
+function renderLounge() {
+  const box = document.getElementById('lounge');
+  const activeSlots = new Set(activeSessions().map(s => s.slot_id));
+  const resting = [1,2,3,4,5,6].filter(id => !activeSlots.has(id));
+  box.innerHTML = '';
+  if (!resting.length) { box.innerHTML = '<div style="color:#3F4C61;font-size:12px;">全員稼働中です</div>'; return; }
+  resting.forEach(id => {
+    const r = rosterOf(id);
+    const wrap = el('div', 'rest');
+    const av = el('div', 'rav');
+    if (typeof window.avatarSvg === 'function')
+      av.innerHTML = window.avatarSvg({ id:'rest' + id, color:r.color, body:r.body, deco:r.deco, visor:r.visor, mark:r.mark }, 'idle', 58);
+    const nm = el('div', 'rnm'); nm.textContent = r.name;
+    const stt = el('div', 'rst'); stt.textContent = '💤 待機中';
+    wrap.appendChild(av); wrap.appendChild(nm); wrap.appendChild(stt);
+    box.appendChild(wrap);
+  });
+}
+
+/* ---------- 左：稼働カード（稼働数で列数が変わる） ---------- */
+function ensureCard(sid) {
+  if (cardEls[sid]) return cardEls[sid];
   const card = el('div', 'card');
   const avwrap = el('div', 'avwrap');
   const ring = el('div', 'ring');
@@ -199,56 +248,53 @@ function ensureCard(id) {
   const panel = el('div', 'panel');
   const tk = el('div', 'tk');
   const st = el('div', 'st');
-  const notice = el('div', '', 'width:100%');       // お知らせ差し込み口
+  const notice = el('div', '', 'width:100%');
   const row = el('div', 'row');
   const reset = el('button', 'mini'); reset.textContent = '⟲'; reset.title = 'タイマーをリセット';
   const jump = el('button', 'mini jump'); jump.textContent = '↗︎ タブ'; jump.title = 'タブへジャンプ';
   const kill = el('button', 'mini'); kill.textContent = '✕'; kill.title = 'スロットから外す';
   row.appendChild(reset); row.appendChild(jump); row.appendChild(kill);
   panel.appendChild(tk); panel.appendChild(st); panel.appendChild(notice); panel.appendChild(row);
-  const assign = el('button', 'assign'); assign.textContent = '＋ 割り当てる'; assign.onclick = openConnect;
-  [avwrap, nm, model, panel, assign].forEach(n => card.appendChild(n));
-  document.getElementById('grid').appendChild(card);
-  cardEls[id] = { card, av, ring, nm, model, panel, tk, st, notice, row, reset, jump, kill, assign };
-  return cardEls[id];
+  [avwrap, nm, model, panel].forEach(n => card.appendChild(n));
+  cardEls[sid] = { card, av, ring, nm, model, panel, tk, st, notice, row, reset, jump, kill };
+  return cardEls[sid];
 }
 
-function render() { renderCards(); renderCounts(); renderQueue(); }
-
 function renderCards() {
-  [1,2,3,4,5,6].forEach(id => {
-    const r = rosterOf(id), s = sessionOfSlot(id), e = ensureCard(id);
-    const look = { id:'c' + id, color:r.color, body:r.body, deco:r.deco, visor:r.visor, mark:r.mark };
-    const avState = s ? (STATUS[s.status] || STATUS.idle).av : 'idle';
-    const key = r.color + '|' + avState;
-    if (lastAvatar[id] !== key && typeof window.avatarSvg === 'function') {
-      e.av.innerHTML = window.avatarSvg(look, avState, 78); lastAvatar[id] = key;
-    }
-    e.nm.textContent = r.name;
+  const grid = document.getElementById('grid');
+  const active = activeSessions();
+  const n = active.length;
+  document.getElementById('emptyHint').style.display = n ? 'none' : '';
 
-    if (!s) {                                        // 空き
-      e.card.className = 'card empty';
-      e.av.style.opacity = .38; e.av.style.animation = 'none';
-      e.ring.style.display = 'none';
-      e.nm.style.color = '#3F4C61';
-      e.model.textContent = '';
-      e.panel.style.display = 'none';
-      e.assign.style.display = '';
-      return;
-    }
+  // 列数: 3人まで1列 / 4人=2列 / 5-6人=3列（4→2-2, 6→3-3）
+  const cols = n <= 3 ? 1 : Math.min(3, Math.ceil(n / 2));
+  grid.style.gridTemplateColumns = `repeat(${cols}, minmax(260px, 320px))`;
 
+  const alive = new Set(active.map(s => s.session_id));
+  Object.keys(cardEls).forEach(sid => {                 // 消えたセッションのカードを撤去
+    if (!alive.has(sid)) { cardEls[sid].card.remove(); delete cardEls[sid]; delete lastAvatar[sid]; }
+  });
+
+  active.forEach(s => {
+    const r = rosterOf(s.slot_id), e = ensureCard(s.session_id);
+    if (e.card.parentNode !== grid) grid.appendChild(e.card);  // 並び順を slot 順に維持
+    else grid.appendChild(e.card);
+
+    const look = { id:'c' + s.session_id, color:r.color, body:r.body, deco:r.deco, visor:r.visor, mark:r.mark };
     const st = STATUS[s.status] || STATUS.idle;
+    const key = r.color + '|' + st.av;
+    if (lastAvatar[s.session_id] !== key && typeof window.avatarSvg === 'function') {
+      e.av.innerHTML = window.avatarSvg(look, st.av, 78); lastAvatar[s.session_id] = key;
+    }
+
     const appr = approvalOfSession(s.session_id);
     const attn = !!appr || (s.browser && s.status === 'awaiting-input');
     e.card.className = 'card' + (attn ? ' attn' : '');
-    e.av.style.opacity = 1;
     e.av.style.animation = s.status === 'working' ? 'bob .9s ease-in-out infinite' : 'none';
     e.ring.style.display = appr ? '' : 'none';
-    e.nm.style.color = '#E6EDF7';
+    e.nm.textContent = r.name; e.nm.style.color = '#E6EDF7';
     e.model.textContent = s.model_name ? (s.browser ? '🌐 ' : '🤖 ') + s.model_name : '';
-    e.panel.style.display = ''; e.assign.style.display = 'none';
 
-    // 作業名（編集中でなければ）
     if (editingTask !== s.session_id) {
       e.tk.style.display = '';
       e.tk.textContent = s.task || '作業名を入力…';
@@ -256,21 +302,17 @@ function renderCards() {
       e.tk.onclick = () => startEditTask(s.session_id, e, s.task || '');
     }
 
-    // ステータス行（ブラウザは生成中/確認してねの語）
     let label = st.label, color = st.color;
     if (s.browser) {
       if (s.status === 'working') label = '● 生成中';
       else if (s.status === 'awaiting-input') { label = '✅ 確認してね'; color = '#FBBF24'; }
       else if (s.status === 'idle' || s.status === 'done') label = '🌐 表示中';
     }
-    const elapsed = Date.now() - (s.status_changed_at || Date.now());
     e.st.style.color = color;
-    e.st.textContent = `${label} ${fmt(elapsed)}`;
+    e.st.textContent = `${label} ${fmt(Date.now() - (s.status_changed_at || Date.now()))}`;
 
-    // お知らせ（判断待ち / 入力待ち / 確認してね）
     renderNotice(e.notice, s, appr, r);
 
-    // ボタン行
     e.kill.onclick = () => clearSession(s.session_id);
     if (s.browser) {
       e.reset.style.display = 'none';
@@ -297,12 +339,10 @@ function renderNotice(box, s, appr, r) {
   if (s.status === 'awaiting-input') {
     if (s.browser) {
       box.className = 'notice done';
-      box.innerHTML = `<h4>回答が完了！確認してね 👀</h4>
-        <div style="font-size:11px;color:#B0895A;">ブラウザのタブで確認できます</div>`;
+      box.innerHTML = `<h4>回答が完了！確認してね 👀</h4><div style="font-size:11px;color:#B0895A;">ブラウザのタブで確認できます</div>`;
     } else {
       box.className = 'notice inp';
-      box.innerHTML = `<h4>入力を待ってます 💬</h4>
-        <div style="font-size:11.5px;color:#9FB6D0;">${esc(s.detail || '入力待ち')}<span style="animation:caret 1s step-end infinite">_</span></div>`;
+      box.innerHTML = `<h4>入力を待ってます 💬</h4><div style="font-size:11.5px;color:#9FB6D0;">${esc(s.detail || '入力待ち')}<span style="animation:caret 1s step-end infinite">_</span></div>`;
     }
     return;
   }
@@ -312,15 +352,79 @@ function renderNotice(box, s, appr, r) {
 function startEditTask(sid, e, cur) {
   editingTask = sid;
   const input = el('input', 'taskin'); input.value = cur; input.placeholder = '作業名を入力';
-  e.tk.style.display = 'none';
-  e.tk.after(input); input.focus(); input.select();
-  const done = save => {
-    editingTask = null; input.remove(); e.tk.style.display = '';
-    if (save) saveTask(sid, input.value); else render();
-  };
-  // IME 変換確定の Enter は保存しない（日本語入力の二重確定防止）
+  e.tk.style.display = 'none'; e.tk.after(input); input.focus(); input.select();
+  const done = save => { editingTask = null; input.remove(); e.tk.style.display = ''; if (save) saveTask(sid, input.value); else render(); };
   input.onkeydown = ev => { if (ev.key === 'Enter' && !ev.isComposing && ev.keyCode !== 229) done(true); else if (ev.key === 'Escape') done(false); };
   input.onblur = () => { if (editingTask === sid) done(true); };
+}
+
+/* ---------- 右：球体（ワイヤーコア） ---------- */
+let MESH = null;
+function buildMesh() {
+  if (MESH) return MESH;
+  let s = 19; const rnd = () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; };
+  const C = 120, R = 106, STEP = 9.2, pts = [];
+  for (let gy = C - R; gy < C + R; gy += STEP)
+    for (let gx = C - R; gx < C + R; gx += STEP) {
+      const x = gx + (rnd() - .5) * STEP * .9, y = gy + (rnd() - .5) * STEP * .9;
+      if (Math.hypot(x - C, y - C) <= R) pts.push({ x, y });
+    }
+  const BASE = ['#38BDF8', '#7DD3FC', '#0EA5E9', '#60A5FA'];
+  pts.forEach((p, i) => { p.c = BASE[(i * 5) % BASE.length]; });
+  const seen = {}, edges = [], adj = pts.map(() => []);
+  pts.forEach((p, i) => {
+    pts.map((q, j) => ({ j, d:(q.x - p.x) ** 2 + (q.y - p.y) ** 2 }))
+      .filter(o => o.j !== i).sort((a, b) => a.d - b.d).slice(0, 3)
+      .forEach(o => { const k = i < o.j ? i + '-' + o.j : o.j + '-' + i; if (seen[k]) return; seen[k] = 1; edges.push([pts[i], pts[o.j]]); adj[i].push(o.j); adj[o.j].push(i); });
+  });
+  MESH = { pts, edges, adj, C, R };
+  return MESH;
+}
+function renderCore() {
+  const { pts, edges, C, R } = buildMesh();
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 240 240');
+  const add = (t, at) => { const n = document.createElementNS(ns, t); for (const k in at) n.setAttribute(k, at[k]); svg.appendChild(n); return n; };
+  add('circle', { cx:C, cy:C, r:R, fill:'rgba(8,22,44,.5)', stroke:'#1D5B8F', 'stroke-width':1, opacity:.8 });
+  add('ellipse', { cx:C, cy:C, rx:R, ry:R * .34, fill:'none', stroke:'#17466E', 'stroke-width':.9 });
+  add('ellipse', { cx:C, cy:C, rx:R * .34, ry:R, fill:'none', stroke:'#17466E', 'stroke-width':.9 });
+  edges.forEach(([a, b]) => add('line', { x1:a.x, y1:a.y, x2:b.x, y2:b.y, stroke:'#2E7BB8', 'stroke-width':.5, opacity:.5 }));
+  pts.forEach(p => add('circle', { cx:p.x, cy:p.y, r:.95, fill:p.c, opacity:.8 }));
+  const beams = document.createElementNS(ns, 'g'); beams.setAttribute('id', 'beams'); svg.appendChild(beams);
+  const sphere = document.getElementById('sphere'); sphere.innerHTML = ''; sphere.appendChild(svg);
+}
+function activeSources() {
+  const out = [];
+  Object.values(state.sessions || {}).forEach(s => {
+    if (['working', 'awaiting-approval', 'awaiting-input'].indexOf(s.status) < 0) return;
+    out.push({ c: rosterOf(s.slot_id).color || '#38BDF8', ang: (s.slot_id * 57) % 360 });
+  });
+  return out;
+}
+function fireBeams() {
+  const beams = document.getElementById('beams'); if (!beams) return;
+  beams.innerHTML = '';
+  const src = activeSources(); if (!src.length) return;
+  const { pts, adj, C, R } = buildMesh();
+  const ns = 'http://www.w3.org/2000/svg';
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const rimAt = deg => { const a = deg * Math.PI / 180, tx = C + Math.cos(a) * R, ty = C + Math.sin(a) * R; let best = 0, bd = Infinity; pts.forEach((p, i) => { const d = (p.x - tx) ** 2 + (p.y - ty) ** 2; if (d < bd) { bd = d; best = i; } }); return best; };
+  const route = (from, to) => { const prev = { [from]: -1 }, q = [from]; while (q.length) { const cur = q.shift(); if (cur === to) break; adj[cur].forEach(nn => { if (!(nn in prev)) { prev[nn] = cur; q.push(nn); } }); } if (!(to in prev)) return null; const seq = []; for (let nn = to; nn !== -1; nn = prev[nn]) seq.push(pts[nn]); return seq.reverse(); };
+  const n = Math.random() < .4 ? 1 : Math.min(2, src.length);
+  for (let i = 0; i < n; i++) {
+    const s = src[Math.floor(Math.random() * src.length)];
+    const from = s.ang + rand(-20, 20);
+    const seq = route(rimAt(from), rimAt(from + 180 + rand(-52, 52)));
+    if (!seq || seq.length < 3) continue;
+    const d = 'M' + seq.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L');
+    let len = 0; for (let k = 1; k < seq.length; k++) len += Math.hypot(seq[k].x - seq[k - 1].x, seq[k].y - seq[k - 1].y);
+    const seg = 46, P = Math.ceil(len) + seg, dur = Math.max(1.1, len * rand(.0062, .0115)).toFixed(2), delay = rand(0, 4.5).toFixed(2);
+    const path = (w, op, stroke, lag, sg) => { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); p.setAttribute('fill', 'none'); p.setAttribute('stroke-linecap', 'round'); p.style.stroke = stroke || s.c; p.style.strokeWidth = w; p.style.opacity = op; p.style.strokeDasharray = `${sg || seg} ${P - (sg || seg)}`; p.style.setProperty('--dash-to', -P); p.style.animation = `dashRun ${dur}s linear ${(parseFloat(delay) + lag).toFixed(2)}s infinite`; beams.appendChild(p); };
+    const trace = document.createElementNS(ns, 'path'); trace.setAttribute('d', d); trace.setAttribute('fill', 'none'); trace.setAttribute('stroke', s.c); trace.setAttribute('stroke-width', 1.1); trace.setAttribute('opacity', .18); trace.setAttribute('stroke-linecap', 'round'); beams.appendChild(trace);
+    [[.46, 1.2, .07], [.34, 1.3, .12], [.23, 1.4, .2], [.13, 1.4, .32], [.05, 1.4, .55]].forEach(([lag, w, op]) => path(w, op, null, lag));
+    path(4.4, .13, null, .1); path(1.5, .92, null, 0); path(.7, .95, '#F6FCFF', 0, seg * .42);
+  }
 }
 
 function renderCounts() {
@@ -343,23 +447,12 @@ function renderQueue() {
 }
 
 /* ---------- API ---------- */
-async function decide(id, decision) {
-  try { await fetch(`${API}/api/approvals/${id}/decision`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ decision, reason:'' }) }); }
-  catch (e) { console.error(e); }
-}
+async function decide(id, decision) { try { await fetch(`${API}/api/approvals/${id}/decision`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ decision, reason:'' }) }); } catch (e) { console.error(e); } }
 async function resetTimer(sid) { try { await fetch(`${API}/api/sessions/${sid}/reset-timer`, { method:'POST' }); } catch (e) { console.error(e); } }
-async function saveTask(sid, task) {
-  try { await fetch(`${API}/api/sessions/${sid}/task`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ task }) }); }
-  catch (e) { console.error(e); }
-  render();
-}
+async function saveTask(sid, task) { try { await fetch(`${API}/api/sessions/${sid}/task`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ task }) }); } catch (e) { console.error(e); } render(); }
 async function clearSession(sid) { try { await fetch(`${API}/api/sessions/${sid}`, { method:'DELETE' }); } catch (e) { console.error(e); } render(); }
 async function clearAll() { try { await fetch(`${API}/api/sessions/clear`, { method:'POST' }); } catch (e) { console.error(e); } render(); }
-async function jumpToTab(url) {
-  if (!url) return;
-  try { await fetch(`${API}/api/tabs/activate`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ url }) }); }
-  catch (e) { console.error(e); }
-}
+async function jumpToTab(url) { if (!url) return; try { await fetch(`${API}/api/tabs/activate`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ url }) }); } catch (e) { console.error(e); } }
 
 /* ---------- 接続モーダル ---------- */
 function openConnect() { document.getElementById('connectModal').classList.add('open'); refreshDiscover(); }
@@ -374,49 +467,32 @@ async function refreshDiscover() {
     const tabs = data.tabs || [];
     if (!discovered.length && !tabs.length) { list.innerHTML = '<div class="hint" style="text-align:center">稼働中の AI が見つかりません</div>'; return; }
     const procHtml = discovered.map((s, i) => `
-      <div class="item">
-        <div><div class="p">📁 ${esc(s.project)}</div>
-          <div class="m">PID ${esc(String(s.pid))}${s.started ? ' · ' + esc(s.started) : ''}</div></div>
-        ${s.connected ? '<span class="m">接続済み</span>' : `<button class="btn" data-i="${i}">接続</button>`}
-      </div>`).join('');
+      <div class="item"><div><div class="p">📁 ${esc(s.project)}</div>
+        <div class="m">PID ${esc(String(s.pid))}${s.started ? ' · ' + esc(s.started) : ''}</div></div>
+        ${s.connected ? '<span class="m">接続済み</span>' : `<button class="btn" data-i="${i}">接続</button>`}</div>`).join('');
     const tabHtml = tabs.map((t, i) => `
-      <div class="item">
-        <div style="min-width:0;"><div class="p">🌐 ${esc(t.project)}</div>
-          <div class="m" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;">${esc(t.ai_name)} · ${esc(t.url)}</div></div>
-        ${t.connected ? '<span class="m">接続済み</span>' : `<button class="btn" data-t="${i}">接続</button>`}
-      </div>`).join('');
+      <div class="item"><div style="min-width:0;"><div class="p">🌐 ${esc(t.project)}</div>
+        <div class="m" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;">${esc(t.ai_name)} · ${esc(t.url)}</div></div>
+        ${t.connected ? '<span class="m">接続済み</span>' : `<button class="btn" data-t="${i}">接続</button>`}</div>`).join('');
     list.innerHTML =
       (procHtml ? `<div class="hint">🖥 ネイティブ（ライブ連携）</div>${procHtml}` : '') +
       (tabHtml ? `<div class="hint" style="margin-top:12px">🌐 ブラウザのAI（存在表示・生成検知）</div>${tabHtml}` : '');
     list.querySelectorAll('button[data-i]').forEach(b => b.onclick = () => connectDiscovered(discovered[+b.dataset.i]));
     list.querySelectorAll('button[data-t]').forEach(b => b.onclick = () => connectTab(tabs[+b.dataset.t]));
-  } catch (e) {
-    list.innerHTML = '<div class="hint" style="text-align:center;color:#FCA5A5">検知に失敗しました</div>';
-  }
+  } catch (e) { list.innerHTML = '<div class="hint" style="text-align:center;color:#FCA5A5">検知に失敗しました</div>'; }
 }
 async function connectDiscovered(s) {
   if (!s) return;
-  try {
-    await fetch(`${API}/api/events`, { method:'POST', headers:{ 'Content-Type':'application/json' },
-      body:JSON.stringify({ adapter:'discovered', session_id:s.session_id, cwd:s.cwd || ('/' + s.project),
-        kind:'start', model_name:s.ai_name || 'AI', detail:'接続しました', ts:Math.floor(Date.now() / 1000) }) });
-    refreshDiscover(); render();
-  } catch (e) { console.error(e); }
+  try { await fetch(`${API}/api/events`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ adapter:'discovered', session_id:s.session_id, cwd:s.cwd || ('/' + s.project), kind:'start', model_name:s.ai_name || 'AI', detail:'接続しました', ts:Math.floor(Date.now() / 1000) }) }); refreshDiscover(); render(); } catch (e) { console.error(e); }
 }
 async function connectTab(t) {
   if (!t) return;
-  try {
-    await fetch(`${API}/api/events`, { method:'POST', headers:{ 'Content-Type':'application/json' },
-      body:JSON.stringify({ adapter:'browser', session_id:t.session_id, cwd:t.url, url:t.url,
-        kind:'start', model_name:t.ai_name || 'AI', detail:'ブラウザで開いています', ts:Math.floor(Date.now() / 1000) }) });
-    refreshDiscover(); render();
-  } catch (e) { console.error(e); }
+  try { await fetch(`${API}/api/events`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ adapter:'browser', session_id:t.session_id, cwd:t.url, url:t.url, kind:'start', model_name:t.ai_name || 'AI', detail:'ブラウザで開いています', ts:Math.floor(Date.now() / 1000) }) }); refreshDiscover(); render(); } catch (e) { console.error(e); }
 }
 
 /* ---------- 詳細モーダル ---------- */
 function openDetail(id) {
-  const a = (state.pendingApprovals || {})[id];
-  if (!a) return;
+  const a = (state.pendingApprovals || {})[id]; if (!a) return;
   const s = state.sessions[a.card_session_id] || state.sessions[a.session_id] || {};
   const r = rosterOf(s.slot_id);
   document.getElementById('detailTitle').textContent = `${r.name || 'AI'} の判断待ち`;
@@ -440,15 +516,23 @@ function connectWS() {
   ws.onopen = () => { const c = document.getElementById('conn'); c.textContent = '● 接続中'; c.className = 'conn mono'; };
   ws.onmessage = ev => {
     const msg = JSON.parse(ev.data);
-    if (msg.type === 'initial_state' || msg.type === 'state_update') { state = msg.data; if (editingTask === null) render(); }
+    if (msg.type === 'initial_state' || msg.type === 'state_update') {
+      const before = activeSources().length;
+      state = msg.data;
+      if (editingTask === null) render();
+      if (before === 0 && activeSources().length > 0) fireBeams();
+    }
   };
   ws.onclose = () => { const c = document.getElementById('conn'); c.textContent = '接続なし'; c.className = 'conn off mono'; setTimeout(connectWS, 3000); };
   ws.onerror = e => console.error('WebSocket error', e);
 }
 
+renderCore();
 render();
 connectWS();
 setInterval(() => { if (editingTask === null) render(); }, 1000);
+setInterval(fireBeams, 9600);
+fireBeams();
 </script>
 </body>
 </html>

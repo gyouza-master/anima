@@ -402,6 +402,7 @@ app.post('/api/events', (req, res) => {
   } else if (kind === 'notification') {
     if (state.sessions[sid]) {
       state.sessions[sid].status = status || 'awaiting-input';
+      if (detail) state.sessions[sid].detail = detail; // e.g. 「❓ <質問文>」
       state.sessions[sid].status_changed_at = Date.now();
     }
   } else if (kind === 'stop') {

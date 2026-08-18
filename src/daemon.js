@@ -335,31 +335,44 @@ async function pollBrowserTabs() {
     for (const s of targets) {
       const r = await probeBrowserTab(s.url);
       if (!r || r.err || typeof r.len !== 'number') continue;
-      // 主信号 = busy（送信ボタンが無効 or stop ボタン）。思考ポーズを跨いで
-      // 安定するので、これが true の間は「生成中」。補助として会話テキストが
-      // 過去最大を超えて伸びた場合も動きありとみなす（点滅等では誤爆しない）。
-      const grew = typeof s._maxLen === 'number' && r.len > s._maxLen;
-      s._maxLen = Math.max(s._maxLen || 0, r.len);
-      const active = r.busy === true || grew;
-      if (active) s._lastActive = Date.now();
-      // busy が true の間は無条件で生成中。busy が落ちた後は、バースト配信の
-      // 小さなギャップを吸収するため DONE_DELAY_MS だけ猶予してから「完了」。
-      const DONE_DELAY_MS = 2500;
-      const now = r.busy === true || (Date.now() - (s._lastActive || 0)) < DONE_DELAY_MS;
+      const nowTs = Date.now();
+      const grew = typeof s._prevLen === 'number' && r.len > s._prevLen; // 直前ポーリング比で増加
+      if (r.stop === true) s._everStop = true; // このタブは停止ボタンを出すUI
+
+      let active;
+      if (s._everStop) {
+        // 停止ボタンを出すタブ(ミオ型): 停止ボタンの有無が権威。消えたら完了。
+        // 完了後に入力欄が空で送信ボタンが disabled のままでも誤検知しない。
+        active = r.stop === true;
+      } else {
+        // 停止ボタンを出さないタブ(ノア型): 生成は sendDisabled=true の区間で挟まれる。
+        // ただし「静的に disabled な空入力欄」を誤検知しないよう、実際の生成開始
+        // （sendDisabled の false→true 立ち上がり、またはテキスト増加）を見てから信頼する。
+        const rising = s._prevSendDisabled === false && r.sendDisabled === true;
+        if (rising || grew) s._genStarted = true;
+        if (r.sendDisabled === false) s._genStarted = false; // 送信可能に戻った＝完了
+        active = r.sendDisabled === true && s._genStarted === true;
+      }
+      if (active) s._lastActive = nowTs;
+
+      // 動きが止まってから DONE_DELAY_MS 経ったら完了（バースト配信の小ギャップ吸収）
+      const DONE_DELAY_MS = 2000;
+      const gen = active || (nowTs - (s._lastActive || 0) < DONE_DELAY_MS);
       const prev = s._gen === true;
-      if (now && !prev) {
+      if (gen && !prev) {
         s.status = 'working';
         s.detail = '生成中…';
-        s.status_changed_at = Date.now();
+        s.status_changed_at = nowTs;
         changed = true;
-      } else if (!now && prev) {
+      } else if (!gen && prev) {
         s.status = 'awaiting-input';
         s.detail = '✅ 回答完了・確認してね';
-        s.status_changed_at = Date.now();
+        s.status_changed_at = nowTs;
         changed = true;
       }
-      s._gen = now;
-      s._len = r.len;
+      s._gen = gen;
+      s._prevLen = r.len;
+      s._prevSendDisabled = r.sendDisabled === true;
     }
   } finally {
     polling = false;

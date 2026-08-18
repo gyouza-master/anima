@@ -18,14 +18,14 @@
 
   /* ぼわ〜っと漂う背景グラデ（オーロラ風ブロブ） */
   .bg { position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none; }
-  .blob { position:absolute; border-radius:50%; filter:blur(95px); opacity:.55; will-change:transform; }
-  .b1 { width:660px; height:660px; left:6%;  top:-12%;    background:radial-gradient(circle, rgba(56,189,248,.24), transparent 70%);  animation:drift1 27s ease-in-out infinite; }
-  .b2 { width:580px; height:580px; right:4%; top:26%;     background:radial-gradient(circle, rgba(124,58,237,.22), transparent 70%);  animation:drift2 33s ease-in-out infinite; }
-  .b3 { width:560px; height:560px; left:32%; bottom:-16%; background:radial-gradient(circle, rgba(236,72,153,.16), transparent 70%);  animation:drift3 39s ease-in-out infinite; }
-  .b4 { width:440px; height:440px; left:44%; top:8%;      background:radial-gradient(circle, rgba(45,212,191,.12), transparent 70%);  animation:drift1 45s ease-in-out infinite reverse; }
-  @keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)}      50%{transform:translate(70px,50px) scale(1.14)} }
-  @keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)}      50%{transform:translate(-60px,40px) scale(1.1)} }
-  @keyframes drift3 { 0%,100%{transform:translate(0,0) scale(1.06)}   50%{transform:translate(50px,-50px) scale(.94)} }
+  .blob { position:absolute; border-radius:50%; filter:blur(90px); opacity:.85; will-change:transform; }
+  .b1 { width:680px; height:680px; left:4%;  top:-14%;    background:radial-gradient(circle, rgba(56,189,248,.48), transparent 70%);  animation:drift1 22s ease-in-out infinite; }
+  .b2 { width:600px; height:600px; right:2%; top:24%;     background:radial-gradient(circle, rgba(124,58,237,.46), transparent 70%);  animation:drift2 26s ease-in-out infinite; }
+  .b3 { width:580px; height:580px; left:30%; bottom:-18%; background:radial-gradient(circle, rgba(236,72,153,.36), transparent 70%);  animation:drift3 30s ease-in-out infinite; }
+  .b4 { width:460px; height:460px; left:44%; top:6%;      background:radial-gradient(circle, rgba(45,212,191,.30), transparent 70%);  animation:drift1 36s ease-in-out infinite reverse; }
+  @keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)}      50%{transform:translate(180px,120px) scale(1.28)} }
+  @keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)}      50%{transform:translate(-160px,110px) scale(1.22)} }
+  @keyframes drift3 { 0%,100%{transform:translate(0,0) scale(1.12)}   50%{transform:translate(140px,-130px) scale(.86)} }
   @media (prefers-reduced-motion: reduce) { .blob { animation:none !important; } }
   .mono { font-family:'IBM Plex Mono',Monaco,monospace; }
 

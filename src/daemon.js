@@ -10,6 +10,7 @@ import { sendNotification } from './notification.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const configPath = join(__dirname, '../config/approval.json');
 const rosterPath = join(__dirname, '../config/roster.json');
+const statePath = join(__dirname, '../config/state.json');
 const logsDir = join(__dirname, '../logs');
 
 // Ensure logs directory exists
@@ -132,6 +133,71 @@ function broadcastState() {
       client.send(message);
     }
   });
+  saveState();
+}
+
+// --- 状態の永続化（daemon 再起動でセッションが消えないように） ---
+// sessions と queue だけをディスクに保存する。pendingApprovals は待機中の
+// HTTP 接続に紐づくので復元しても無意味なため保存しない。書き込みは軽く
+// デバウンスして、activity イベント連発時の過剰な書き込みを避ける。
+let saveTimer = null;
+function saveState() {
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    flushState();
+  }, 300);
+}
+
+function flushState() {
+  try {
+    writeFileSync(statePath, JSON.stringify({
+      sessions: state.sessions,
+      queue: state.queue
+    }, null, 2));
+  } catch (err) {
+    console.error('saveState failed:', err.message);
+  }
+}
+
+function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0); // signal 0 = liveness probe, doesn't actually kill
+    return true;
+  } catch (err) {
+    return err.code === 'EPERM'; // exists but owned by another user
+  }
+}
+
+// 起動時に前回の状態を復元。復元時に「掃除」する:
+//  - discover 由来(pid-*)でプロセスが既に死んでいるカードは捨てる（ゾンビ防止）
+//  - 承認待ちのまま落ちた場合、承認は失われているので idle に戻す
+function loadState() {
+  let saved;
+  try {
+    saved = JSON.parse(readFileSync(statePath, 'utf-8'));
+  } catch {
+    return; // ファイルなし/壊れ → 何もせず新規状態で開始
+  }
+
+  const restored = {};
+  let dropped = 0;
+  for (const [id, s] of Object.entries(saved.sessions || {})) {
+    if (id.startsWith('pid-')) {
+      const pid = parseInt(id.slice(4), 10);
+      if (!Number.isNaN(pid) && !isPidAlive(pid)) { dropped++; continue; }
+    }
+    if (s.status === 'awaiting-approval') {
+      s.status = 'idle';
+      s.detail = '承認待ちのまま再起動しました';
+    }
+    restored[id] = s;
+  }
+
+  state.sessions = restored;
+  state.queue = Array.isArray(saved.queue) ? saved.queue : [];
+  const kept = Object.keys(restored).length;
+  console.log(`  Restored ${kept} session(s)${dropped ? `, dropped ${dropped} dead` : ''}`);
 }
 
 // Log event to JSONL file
@@ -550,6 +616,11 @@ wss.on('connection', (ws) => {
   });
 });
 
+// Restore persisted sessions before accepting connections, then fill any slots
+// freed by zombie cleanup from the waiting queue.
+loadState();
+processQueue();
+
 // Start server
 server.listen(PORT, () => {
   console.log(`anima daemon listening on localhost:${PORT}`);
@@ -558,9 +629,10 @@ server.listen(PORT, () => {
   console.log(`  WebSocket: ws://localhost:${PORT}/ws`);
 });
 
-// Graceful shutdown
+// Graceful shutdown — flush the latest state so nothing is lost on restart.
 process.on('SIGINT', () => {
   console.log('\nShutting down gracefully...');
+  flushState();
   server.close(() => {
     console.log('Server closed');
     process.exit(0);

@@ -1,1086 +1,679 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>anima - 管制塔</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>anima - 管制塔</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { background:#06090F; color:#E6EDF7; font-family:'Zen Kaku Gothic New',-apple-system,BlinkMacSystemFont,sans-serif; }
+  .mono { font-family:'IBM Plex Mono',Monaco,monospace; }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f5f5f5;
-      padding: 20px;
-    }
+  @keyframes flow { to { stroke-dashoffset:-36; } }
+  @keyframes flowSlow { to { stroke-dashoffset:-24; } }
+  @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+  @keyframes breathe { 0%,100%{opacity:.35} 50%{opacity:.9} }
+  @keyframes pulseRing { 0%,100%{transform:scale(1);opacity:.55} 50%{transform:scale(1.12);opacity:.12} }
+  @keyframes caret { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+  @keyframes dashRun { from { stroke-dashoffset:0; } to { stroke-dashoffset:var(--dash-to); } }
 
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
+  .shell { width:1060px; margin:0 auto; background:#080C14; border:1px solid #1A2231; border-radius:18px; overflow:hidden; transform-origin:top center; }
+  .bar { display:flex; align-items:center; justify-content:space-between; padding:14px 22px; border-bottom:1px solid #161E2C; background:#0A0F1A; }
+  .brand { display:flex; align-items:center; gap:11px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:#38BDF8; box-shadow:0 0 12px #38BDF8; }
+  .logo { font-weight:700; font-size:16px; letter-spacing:.1em; }
+  .sub { font-size:11px; color:#4E5D75; }
+  .actions { display:flex; align-items:center; gap:9px; }
+  .conn { font-size:11px; padding:5px 11px; border-radius:999px; border:1px solid #17453A; background:#0A1B17; color:#34D399; }
+  .conn.off { border-color:#4B2026; background:#1B0F12; color:#FCA5A5; }
+  .btn { font-size:12px; font-weight:600; padding:7px 14px; border-radius:8px; border:none; background:#38BDF8; color:#06090F; cursor:pointer; }
+  .btn:hover { filter:brightness(1.08); }
+  .btn.ghost { background:transparent; border:1px solid #212B3D; color:#8494AC; font-weight:500; }
+  .btn.ghost:hover { border-color:#33415C; color:#C3D0E2; }
 
-    h1 {
-      margin-bottom: 20px;
-      color: #333;
-    }
+  .strip { display:flex; align-items:center; justify-content:space-between; padding:12px 26px; border-bottom:1px solid #161E2C; background:linear-gradient(90deg,rgba(56,189,248,.07),transparent 65%); }
+  .strip .label { font-size:11px; letter-spacing:.16em; color:#3F7EA8; }
+  .counts { display:flex; gap:16px; font-size:12px; font-weight:500; }
 
-    .connection-status {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      padding: 8px 16px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: bold;
-    }
+  .stage { position:relative; width:1000px; height:620px; margin:0 30px; }
+  .glow { position:absolute; left:250px; top:50px; width:500px; height:500px; border-radius:50%;
+          background:radial-gradient(circle at 50% 50%, rgba(56,189,248,.12), rgba(6,9,15,0) 68%); }
+  .wires, .marks { position:absolute; left:0; top:0; pointer-events:none; }
+  .wires { z-index:1; } .marks { z-index:4; }
+  .core { position:absolute; left:380px; top:180px; width:240px; height:240px; z-index:2; }
 
-    .connection-status.connected {
-      background: #4CAF50;
-      color: white;
-    }
+  .slot { position:absolute; width:150px; margin-left:-75px; margin-top:-62px; z-index:3;
+          display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .slot .av { width:70px; height:70px; display:flex; align-items:center; justify-content:center; }
+  .slot .nm { font-size:13.5px; font-weight:700; }
+  .slot .tk { font-size:10.5px; font-weight:500; cursor:pointer; text-align:center; max-width:150px; }
+  .slot .tk:hover { text-decoration:underline; }
+  .slot .st { font-size:10.5px; font-weight:500; font-family:'IBM Plex Mono',monospace; }
+  .slot .row { display:flex; gap:5px; margin-top:1px; }
+  .mini { font-size:10px; border:1px solid #212B3D; background:transparent; color:#5B6B84; border-radius:6px; padding:2px 6px; cursor:pointer; }
+  .mini:hover { color:#C3D0E2; border-color:#33415C; }
+  .assign { font-size:10.5px; font-family:'IBM Plex Mono',monospace; color:#38BDF8; border:1px dashed #1B3F55;
+            background:transparent; padding:4px 10px; border-radius:7px; cursor:pointer; }
+  .taskin { font-size:12px; padding:4px 7px; border:1px solid #38BDF8; background:#0A1220; color:#E6EDF7; border-radius:6px; width:140px; }
 
-    .connection-status.disconnected {
-      background: #f44336;
-      color: white;
-    }
+  .bubble { position:absolute; z-index:5; width:300px; border-radius:14px; padding:14px 15px; }
+  .bubble.appr { background:#12111A; border:1px solid #48381A; box-shadow:0 18px 50px rgba(251,191,36,.16); }
+  .bubble.inp { background:#0B1523; border:1px solid #1E3A55; width:270px; }
+  .bubble h4 { font-size:12.5px; font-weight:700; color:#FBBF24; margin-bottom:9px; }
+  .bubble.inp h4 { color:#93C5FD; }
+  .cmd { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#E8C583; background:#1A1710;
+         border-radius:8px; padding:9px 10px; margin-bottom:11px; word-break:break-all; max-height:56px; overflow:hidden; }
+  .bubble.inp .cmd { color:#9FB6D0; background:transparent; padding:0; margin:0; }
+  .bb { display:flex; gap:8px; }
+  .allow { flex:1; font-size:12.5px; font-weight:700; border:none; border-radius:8px; padding:9px; background:#34D399; color:#06251B; cursor:pointer; }
+  .deny { flex:1; font-size:12.5px; font-weight:700; border:1px solid #4B2026; border-radius:8px; padding:8px; background:#2A1417; color:#FCA5A5; cursor:pointer; }
+  .more { display:block; width:100%; margin-top:8px; background:none; border:none; color:#8494AC; font-size:11px; cursor:pointer; }
+  .more:hover { color:#C3D0E2; }
 
-    .slots-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
-      margin-bottom: 40px;
-    }
+  .queue { display:flex; align-items:center; gap:14px; padding:13px 26px; border-top:1px solid #161E2C; background:#0A0F1A; }
+  .queue .label { font-size:11px; letter-spacing:.08em; color:#4E5D75; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .chip { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8494AC; background:#101724; border:1px solid #1C2536; padding:5px 11px; border-radius:999px; }
 
-    .slot-card {
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      transition: all 0.3s ease;
-    }
-
-    .slot-card:hover {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    .slot-empty {
-      background: #f9f9f9;
-      border: 2px dashed #ccc;
-      color: #999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 200px;
-    }
-
-    .character-badge {
-      display: inline-block;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      margin-right: 12px;
-      vertical-align: middle;
-    }
-
-    .character-name {
-      font-size: 18px;
-      font-weight: bold;
-      margin-bottom: 10px;
-      color: #333;
-    }
-
-    .session-info {
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 10px;
-      font-family: 'Monaco', monospace;
-    }
-
-    .status-badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 16px;
-      font-size: 12px;
-      font-weight: bold;
-      margin-bottom: 10px;
-      width: 100%;
-      text-align: center;
-    }
-
-    .status-working {
-      background: #4CAF50;
-      color: white;
-    }
-
-    .status-awaiting-approval {
-      background: #FF9800;
-      color: white;
-    }
-
-    .status-awaiting-input {
-      background: #2196F3;
-      color: white;
-    }
-
-    .status-idle {
-      background: #E0E0E0;
-      color: #666;
-    }
-
-    .status-error {
-      background: #f44336;
-      color: white;
-    }
-
-    .activity-text {
-      font-size: 13px;
-      color: #666;
-      margin-bottom: 8px;
-      font-family: 'Monaco', monospace;
-      word-break: break-all;
-    }
-
-    .elapsed-time {
-      font-size: 12px;
-      color: #999;
-      margin-top: 8px;
-    }
-
-    .queue-section {
-      margin-top: 40px;
-    }
-
-    .queue-section h2 {
-      font-size: 16px;
-      color: #666;
-      margin-bottom: 12px;
-    }
-
-    .queue-list {
-      background: white;
-      border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    }
-
-    .queue-item {
-      padding: 8px 0;
-      border-bottom: 1px solid #eee;
-      font-size: 13px;
-      color: #666;
-      font-family: 'Monaco', monospace;
-    }
-
-    .queue-item:last-child {
-      border-bottom: none;
-    }
-
-    .queue-empty {
-      color: #999;
-      font-style: italic;
-    }
-
-    .approvals-section {
-      background: #fff5f5;
-      border: 2px solid #f44336;
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 40px;
-    }
-
-    .approval-card {
-      background: white;
-      border: 2px solid #ff9800;
-      border-radius: 8px;
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 12px rgba(244, 67, 54, 0.2);
-    }
-
-    .approval-header {
-      display: flex;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-
-    .approval-header .character-badge {
-      margin-right: 12px;
-    }
-
-    .approval-header .character-name {
-      margin-bottom: 0;
-    }
-
-    .approval-tool {
-      background: #f5f5f5;
-      border-left: 4px solid #ff9800;
-      padding: 12px;
-      margin-bottom: 16px;
-      border-radius: 4px;
-      font-family: 'Monaco', monospace;
-      font-size: 13px;
-      word-break: break-all;
-      color: #333;
-    }
-
-    .approval-buttons {
-      display: flex;
-      gap: 12px;
-    }
-
-    .approval-btn {
-      flex: 1;
-      padding: 12px;
-      border: none;
-      border-radius: 4px;
-      font-weight: bold;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .approval-btn-allow {
-      background: #4CAF50;
-      color: white;
-    }
-
-    .approval-btn-allow:hover {
-      background: #45a049;
-    }
-
-    .approval-btn-deny {
-      background: #f44336;
-      color: white;
-    }
-
-    .approval-btn-deny:hover {
-      background: #da190b;
-    }
-
-    .approval-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    /* --- キャラクター表示 --- */
-    .slot-card { text-align: center; }
-
-    .avatar {
-      width: 72px;
-      height: 72px;
-      margin: 0 auto 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.2s ease;
-    }
-
-    .pulse {
-      transform-origin: center;
-      animation: ring-pulse 1.1s ease-in-out infinite;
-    }
-
-    @keyframes ring-pulse {
-      0%, 100% { opacity: 0.7; }
-      50% { opacity: 0.15; }
-    }
-
-    .avatar-working {
-      animation: char-bounce 0.9s ease-in-out infinite;
-    }
-
-    @keyframes char-bounce {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-7px); }
-    }
-
-    .avatar-waiting {
-      animation: char-pulse 1.4s ease-in-out infinite;
-    }
-
-    @keyframes char-pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.08); opacity: 0.7; }
-    }
-
-    /* --- 吹き出し（判断待ち） --- */
-    .bubble {
-      position: relative;
-      margin: 0 auto 14px;
-      max-width: 240px;
-      background: #fff;
-      border: 2px solid #FF9800;
-      border-radius: 12px;
-      padding: 12px 12px 10px;
-      box-shadow: 0 6px 18px rgba(255, 152, 0, 0.28);
-      text-align: left;
-      /* No entry/loop animation here: the slot list re-renders every second to
-         refresh timers, which would restart a CSS animation each time and make
-         an opacity-based one flicker to invisible. Keep the bubble static. */
-    }
-
-    .bubble::after {
-      content: '';
-      position: absolute;
-      left: 50%;
-      bottom: -11px;
-      transform: translateX(-50%);
-      border-width: 11px 9px 0 9px;
-      border-style: solid;
-      border-color: #FF9800 transparent transparent transparent;
-    }
-
-    .bubble::before {
-      content: '';
-      position: absolute;
-      left: 50%;
-      bottom: -8px;
-      transform: translateX(-50%);
-      border-width: 9px 7px 0 7px;
-      border-style: solid;
-      border-color: #fff transparent transparent transparent;
-      z-index: 1;
-    }
-
-    .bubble-input {
-      border-color: #2196F3;
-      box-shadow: 0 6px 18px rgba(33, 150, 243, 0.28);
-    }
-    .bubble-input::after { border-top-color: #2196F3; }
-
-    .bubble-work {
-      border-color: #22C55E;
-      box-shadow: 0 6px 18px rgba(34, 197, 94, 0.25);
-    }
-    .bubble-work::after { border-top-color: #22C55E; }
-
-    .bubble-done {
-      border-color: #F59E0B;
-      box-shadow: 0 6px 18px rgba(245, 158, 11, 0.3);
-    }
-    .bubble-done::after { border-top-color: #F59E0B; }
-
-    @keyframes bubble-pop {
-      0% { transform: scale(0.7); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    @keyframes bubble-attention {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-4px); }
-    }
-
-    .bubble-msg {
-      font-size: 13px;
-      font-weight: bold;
-      color: #333;
-      margin-bottom: 6px;
-    }
-    .bubble-cmd {
-      font-family: 'Monaco', monospace;
-      font-size: 11px;
-      color: #b45309;
-      background: #fff7ed;
-      border-radius: 6px;
-      padding: 6px 8px;
-      margin-bottom: 10px;
-      max-height: 54px;
-      overflow: hidden;
-      word-break: break-all;
-      white-space: pre-wrap;
-    }
-    .bubble-buttons { display: flex; gap: 8px; margin-bottom: 6px; }
-    .bubble-btn {
-      flex: 1;
-      padding: 8px;
-      border: none;
-      border-radius: 6px;
-      font-weight: bold;
-      font-size: 13px;
-      cursor: pointer;
-      transition: filter 0.15s;
-    }
-    .bubble-btn:hover { filter: brightness(1.08); }
-    .bubble-btn-allow { background: #4CAF50; color: #fff; }
-    .bubble-btn-deny { background: #f44336; color: #fff; }
-    .bubble-detail {
-      display: block;
-      width: 100%;
-      background: none;
-      border: none;
-      color: #2563eb;
-      font-size: 12px;
-      cursor: pointer;
-      padding: 4px;
-      text-align: center;
-    }
-    .bubble-detail:hover { text-decoration: underline; }
-
-    /* --- 詳細モーダル --- */
-    .detail-row { margin-bottom: 12px; }
-    .detail-label { font-size: 11px; color: #999; margin-bottom: 3px; }
-    .detail-value {
-      font-family: 'Monaco', monospace;
-      font-size: 13px;
-      color: #333;
-      background: #f7f7f7;
-      border-radius: 6px;
-      padding: 8px 10px;
-      word-break: break-all;
-      white-space: pre-wrap;
-    }
-
-    .char-name {
-      font-weight: bold;
-      font-size: 16px;
-      color: #333;
-    }
-
-    .char-model {
-      font-size: 11px;
-      color: #999;
-      margin-bottom: 10px;
-      font-family: 'Monaco', monospace;
-      min-height: 14px;
-    }
-
-    .task-display {
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 10px;
-      background: #f7f7f7;
-      border-radius: 6px;
-      transition: background 0.2s;
-    }
-
-    .task-display:hover { background: #eef; }
-
-    .slot-empty-v2 {
-      background: #fafafa;
-      border: 2px dashed #ddd;
-      border-radius: 8px;
-      padding: 20px;
-      text-align: center;
-      min-height: 180px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-  </style>
+  .modal { display:none; position:fixed; inset:0; background:rgba(3,6,12,.72); z-index:1000; align-items:center; justify-content:center; }
+  .modal.open { display:flex; }
+  .sheet { width:90%; max-width:500px; max-height:80vh; overflow-y:auto; background:#0B111C; border:1px solid #1E2739;
+           border-radius:16px; padding:24px; box-shadow:0 30px 80px rgba(0,0,0,.6); }
+  .sheet h2 { font-size:17px; font-weight:700; }
+  .sheet .hint { font-size:12px; color:#5B6B84; margin:6px 0 16px; }
+  .item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px;
+          border:1px solid #1C2536; border-radius:10px; margin-bottom:8px; background:#0A1220; }
+  .item .p { font-size:13px; font-weight:700; }
+  .item .m { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#4E5D75; }
+  .drow { margin-bottom:12px; }
+  .dlabel { font-size:11px; color:#4E5D75; margin-bottom:4px; }
+  .dval { font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:#C3D0E2; background:#0A1220;
+          border:1px solid #18202E; border-radius:8px; padding:8px 10px; word-break:break-all; white-space:pre-wrap; }
+</style>
 </head>
 <body>
-  <div class="connection-status disconnected" id="connectionStatus">接続中...</div>
 
-  <div class="container">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-      <h1 style="margin-bottom: 0;">⚙️ anima - 管制塔</h1>
-      <div style="display: flex; gap: 10px;">
-        <button onclick="openConnectModal()" style="padding: 8px 16px; font-size: 13px; border: none; background: #4ECDC4; color: white; font-weight: bold; border-radius: 6px; cursor: pointer;">+ 接続</button>
-        <button onclick="clearAllSessions()" style="padding: 8px 16px; font-size: 13px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer;">🧹 全スロットをクリア</button>
-      </div>
+<div class="shell" id="shell">
+  <div class="bar">
+    <div class="brand">
+      <div class="dot"></div>
+      <div class="logo">anima</div>
+      <div class="sub mono">管制塔 · localhost:4317</div>
     </div>
-
-    <!-- 接続モーダル -->
-    <div id="connectModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;">
-      <div style="background: white; border-radius: 12px; padding: 28px; width: 90%; max-width: 480px; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <h2 style="color: #333;">稼働中の AI を選択</h2>
-          <button onclick="refreshDiscover()" style="padding: 6px 12px; font-size: 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer;">🔄 更新</button>
-        </div>
-        <p style="font-size: 12px; color: #999; margin-bottom: 16px;">今このMacで動いている AI の一覧です。ネイティブ（Claude Code等）はライブ連携、ブラウザのAIは存在表示＋タブへジャンプ。</p>
-
-        <div id="discoverList" style="margin-bottom: 20px;">
-          <div style="color: #999; font-size: 13px; text-align: center; padding: 20px;">読み込み中...</div>
-        </div>
-
-        <button onclick="closeConnectModal()" style="width: 100%; padding: 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer;">閉じる</button>
-      </div>
+    <div class="actions">
+      <div class="conn off mono" id="conn">接続なし</div>
+      <button class="btn" onclick="openConnect()">＋ 接続</button>
+      <button class="btn ghost" onclick="clearAll()">全クリア</button>
     </div>
-
-    <!-- 判断内容の詳細モーダル -->
-    <div id="detailModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;">
-      <div style="background: white; border-radius: 12px; padding: 28px; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-          <h2 id="detailTitle" style="color: #333; font-size: 18px;">判断内容の詳細</h2>
-          <button onclick="closeDetail()" style="padding: 6px 12px; font-size: 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer;">✕ 閉じる</button>
-        </div>
-        <div id="detailBody"></div>
-        <div id="detailActions" style="display: flex; gap: 12px; margin-top: 20px;"></div>
-      </div>
-    </div>
-
-    <section id="approvalsSection" class="approvals-section" style="display: none;">
-      <h2 style="margin-bottom: 20px; color: #c00;">🔔 承認待ち（スロット外）</h2>
-      <div id="approvalsContainer"></div>
-    </section>
-
-    <section class="slots-section">
-      <h2 style="margin-bottom: 20px; color: #666;">セッションスロット</h2>
-      <div class="slots-grid" id="slotsContainer"></div>
-    </section>
-
-    <section class="queue-section">
-      <h2>待機キュー</h2>
-      <div class="queue-list" id="queueContainer">
-        <div class="queue-item queue-empty">空</div>
-      </div>
-    </section>
   </div>
 
-  <script src="/avatar.js"></script>
-  <script>
-    const WS_URL = `ws://${window.location.hostname}:4317/ws`;
-    let ws = null;
-    let state = {
-      sessions: {},
-      queue: [],
-      pendingApprovals: {}
+  <div class="strip">
+    <div style="display:flex;align-items:center;gap:18px;">
+      <div class="label mono">ANIMA CORE</div>
+      <div class="counts mono" id="counts"></div>
+    </div>
+    <div class="mono" style="font-size:11px;color:#4E5D75;" id="clock"></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="glow"></div>
+    <svg class="wires" id="wires" width="1000" height="620"></svg>
+    <div class="core" id="core"></div>
+    <svg class="marks" id="marks" width="1000" height="620"></svg>
+  </div>
+
+  <div class="queue">
+    <div class="label">待機キュー</div>
+    <div class="chips" id="queue"><div class="chip">空</div></div>
+  </div>
+</div>
+
+<div class="modal" id="connectModal">
+  <div class="sheet">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2>稼働中の AI を選択</h2>
+      <button class="btn ghost" onclick="refreshDiscover()">🔄 更新</button>
+    </div>
+    <div class="hint">今このMacで動いている AI セッションの一覧です。</div>
+    <div id="discoverList"></div>
+    <button class="btn ghost" style="width:100%;padding:11px;" onclick="closeConnect()">閉じる</button>
+  </div>
+</div>
+
+<div class="modal" id="detailModal">
+  <div class="sheet">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 id="detailTitle">判断内容の詳細</h2>
+      <button class="btn ghost" onclick="closeDetail()">✕ 閉じる</button>
+    </div>
+    <div id="detailBody"></div>
+    <div class="bb" style="margin-top:18px;" id="detailActions"></div>
+  </div>
+</div>
+
+<script src="/avatar.js"></script>
+<script>
+/* ---------- 定数 ---------- */
+const API = '';                                  // 同一オリジン（daemon が配信）
+const WS_URL = `ws://${location.hostname}:${location.port || 4317}/ws`;
+const CX = 500, CY = 300, ORB_R = 116;            // コア中心と配線の到達半径
+const SLOT_ANGLE = { 1:200, 2:270, 3:346, 4:21, 5:90, 6:159 };
+const RX = 290, RY = 200;                         // スロット配置の楕円
+
+const STATUS = {
+  'working':            { label:'● 動作中',  color:'#34D399', wire:'work',  av:'working' },
+  'awaiting-approval':  { label:'◉ 判断待ち', color:'#FBBF24', wire:'gate',  av:'waiting' },
+  'awaiting-input':     { label:'◐ 入力待ち', color:'#60A5FA', wire:'slow',  av:'waiting' },
+  'idle':               { label:'○ 返信待ち', color:'#5B6B84', wire:'dim',   av:'idle' },
+  'done':               { label:'○ 完了',    color:'#5B6B84', wire:'dim',   av:'done' },
+  'error':              { label:'× エラー',  color:'#FCA5A5', wire:'gate',  av:'error' }
+};
+const WIRE = {
+  work: { w:0.9, o:0.60, dash:'3 9',  anim:'flow 1.1s linear infinite' },
+  gate: { w:1.2, o:0.85, dash:'8 6',  anim:'breathe 1.2s ease-in-out infinite' },
+  slow: { w:0.9, o:0.45, dash:'5 8',  anim:'flowSlow 2.4s linear infinite' },
+  dim:  { w:0.8, o:0.22, dash:'2 10', anim:null },
+  off:  { w:0.7, o:0.12, dash:'1 12', anim:null }
+};
+
+let state = { sessions:{}, queue:[], pendingApprovals:{}, roster:[] };
+let ws = null, editingTask = null, discovered = [];
+const slotEls = {};            // slot_id -> DOM 参照
+const lastAvatar = {};         // slot_id -> 'color|state'
+let lastWireSig = '';
+
+/* ---------- ユーティリティ ---------- */
+const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; };
+const el = (tag, cls, css) => { const n = document.createElement(tag); if (cls) n.className = cls; if (css) n.style.cssText = css; return n; };
+const slotPos = id => {
+  const a = (SLOT_ANGLE[id] || 0) * Math.PI / 180;
+  return { x: CX + Math.cos(a) * RX, y: CY + Math.sin(a) * RY };
+};
+function fmt(ms) {
+  if (!ms || ms < 0) return '0:00';
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+function rosterOf(id) {
+  return (state.roster || []).find(r => r.id === id) ||
+    { id, name:`スロット ${id}`, color:'#4E5D75', body:'slim', deco:'none', visor:'band', mark:'bar' };
+}
+const sessionOfSlot = id => Object.values(state.sessions || {}).find(s => s.slot_id === id);
+function approvalOfSession(sid) {
+  return Object.values(state.pendingApprovals || {}).find(a => (a.card_session_id || a.session_id) === sid);
+}
+const cmdOf = a => { const ti = (a && a.tool_input) || {}; return typeof ti.command === 'string' ? ti.command : JSON.stringify(ti); };
+
+/* ---------- コアのワイヤーメッシュ（生成は一度だけ） ---------- */
+let MESH = null;
+function buildMesh() {
+  if (MESH) return MESH;
+  let s = 19; const rnd = () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; };
+  const C = 120, R = 106, STEP = 9.2, pts = [];
+  for (let gy = C - R; gy < C + R; gy += STEP)
+    for (let gx = C - R; gx < C + R; gx += STEP) {
+      const x = gx + (rnd() - .5) * STEP * .9, y = gy + (rnd() - .5) * STEP * .9;
+      if (Math.hypot(x - C, y - C) <= R) pts.push({ x, y });
+    }
+  const BASE = ['#38BDF8', '#7DD3FC', '#0EA5E9', '#60A5FA'];
+  pts.forEach((p, i) => { p.c = BASE[(i * 5) % BASE.length]; });
+  const seen = {}, edges = [], adj = pts.map(() => []);
+  pts.forEach((p, i) => {
+    pts.map((q, j) => ({ j, d:(q.x - p.x) ** 2 + (q.y - p.y) ** 2 }))
+      .filter(o => o.j !== i).sort((a, b) => a.d - b.d).slice(0, 3)
+      .forEach(o => {
+        const k = i < o.j ? i + '-' + o.j : o.j + '-' + i;
+        if (seen[k]) return; seen[k] = 1;
+        edges.push([pts[i], pts[o.j]]); adj[i].push(o.j); adj[o.j].push(i);
+      });
+  });
+  MESH = { pts, edges, adj, C, R };
+  return MESH;
+}
+
+function renderCore() {
+  const { pts, edges, C, R } = buildMesh();
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', 240); svg.setAttribute('height', 240);
+  svg.setAttribute('viewBox', '0 0 240 240'); svg.style.display = 'block';
+  const add = (t, at) => { const n = document.createElementNS(ns, t); for (const k in at) n.setAttribute(k, at[k]); svg.appendChild(n); return n; };
+  add('circle', { cx:C, cy:C, r:R, fill:'rgba(8,22,44,.5)', stroke:'#1D5B8F', 'stroke-width':1, opacity:.8 });
+  add('ellipse', { cx:C, cy:C, rx:R, ry:R * .34, fill:'none', stroke:'#17466E', 'stroke-width':.9 });
+  add('ellipse', { cx:C, cy:C, rx:R * .34, ry:R, fill:'none', stroke:'#17466E', 'stroke-width':.9 });
+  edges.forEach(([a, b]) => add('line', { x1:a.x, y1:a.y, x2:b.x, y2:b.y, stroke:'#2E7BB8', 'stroke-width':.5, opacity:.55 }));
+  pts.forEach(p => add('circle', { cx:p.x, cy:p.y, r:.95, fill:p.c, opacity:.8 }));
+  const beams = document.createElementNS(ns, 'g');
+  beams.setAttribute('id', 'beams');
+  svg.appendChild(beams);
+  const core = document.getElementById('core');
+  core.innerHTML = ''; core.appendChild(svg);
+}
+
+/* ---------- 光線：稼働中セッションの色で、縁 → メッシュ → 反対の縁へ ---------- */
+function activeSources() {
+  const out = [];
+  Object.values(state.sessions || {}).forEach(s => {
+    if (['working', 'awaiting-approval', 'awaiting-input'].indexOf(s.status) < 0) return;
+    const r = rosterOf(s.slot_id);
+    out.push({ c:r.color || '#38BDF8', ang: SLOT_ANGLE[s.slot_id] || 0 });
+  });
+  return out;
+}
+function fireBeams() {
+  const beams = document.getElementById('beams');
+  if (!beams) return;
+  beams.innerHTML = '';
+  const src = activeSources();
+  if (!src.length) return;                       // 誰も動いていなければ光らない
+  const { pts, adj, C, R } = buildMesh();
+  const ns = 'http://www.w3.org/2000/svg';
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const rimAt = deg => {
+    const a = deg * Math.PI / 180, tx = C + Math.cos(a) * R, ty = C + Math.sin(a) * R;
+    let best = 0, bd = Infinity;
+    pts.forEach((p, i) => { const d = (p.x - tx) ** 2 + (p.y - ty) ** 2; if (d < bd) { bd = d; best = i; } });
+    return best;
+  };
+  const route = (from, to) => {
+    const prev = { [from]: -1 }, q = [from];
+    while (q.length) { const cur = q.shift(); if (cur === to) break; adj[cur].forEach(n => { if (!(n in prev)) { prev[n] = cur; q.push(n); } }); }
+    if (!(to in prev)) return null;
+    const seq = []; for (let n = to; n !== -1; n = prev[n]) seq.push(pts[n]);
+    return seq.reverse();
+  };
+  const n = Math.random() < .4 ? 1 : Math.min(2, src.length);
+  for (let i = 0; i < n; i++) {
+    const s = src[Math.floor(Math.random() * src.length)];
+    const from = s.ang + rand(-20, 20);
+    const seq = route(rimAt(from), rimAt(from + 180 + rand(-52, 52)));
+    if (!seq || seq.length < 3) continue;
+    const d = 'M' + seq.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L');
+    let len = 0; for (let k = 1; k < seq.length; k++) len += Math.hypot(seq[k].x - seq[k - 1].x, seq[k].y - seq[k - 1].y);
+    const seg = 46, P = Math.ceil(len) + seg, dur = Math.max(1.1, len * rand(.0062, .0115)).toFixed(2), delay = rand(0, 4.5).toFixed(2);
+    const path = (w, op, stroke, lag, sg) => {
+      const p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', d); p.setAttribute('fill', 'none');
+      p.setAttribute('stroke-linecap', 'round');
+      p.style.stroke = stroke || s.c; p.style.strokeWidth = w; p.style.opacity = op;
+      p.style.strokeDasharray = `${sg || seg} ${P - (sg || seg)}`;
+      p.style.setProperty('--dash-to', -P);
+      p.style.animation = `dashRun ${dur}s linear ${(parseFloat(delay) + lag).toFixed(2)}s infinite`;
+      beams.appendChild(p);
     };
+    const trace = document.createElementNS(ns, 'path');
+    trace.setAttribute('d', d); trace.setAttribute('fill', 'none');
+    trace.setAttribute('stroke', s.c); trace.setAttribute('stroke-width', 1.1);
+    trace.setAttribute('opacity', .2); trace.setAttribute('stroke-linecap', 'round');
+    beams.appendChild(trace);
+    [[.46, 1.2, .07], [.34, 1.3, .12], [.23, 1.4, .2], [.13, 1.4, .32], [.05, 1.4, .55]]
+      .forEach(([lag, w, op]) => path(w, op, null, lag));
+    path(4.4, .13, null, .1);
+    path(1.5, .92, null, 0);
+    path(.7, .95, '#F6FCFF', 0, seg * .42);
+  }
+}
 
-    const statusMap = {
-      'working': { badge: '🟢 動作中', class: 'status-working' },
-      'awaiting-approval': { badge: '🟠 判断待ち', class: 'status-awaiting-approval' },
-      'awaiting-input': { badge: '🔵 入力待ち', class: 'status-awaiting-input' },
-      'idle': { badge: '⚪️ 待機', class: 'status-idle' },
-      'done': { badge: '⚪️ 完了', class: 'status-idle' },
-      'error': { badge: '🔴 エラー', class: 'status-error' }
-    };
+/* ---------- 配線（6ポート） ---------- */
+function renderWires() {
+  const sig = [1,2,3,4,5,6].map(id => {
+    const s = sessionOfSlot(id);
+    return id + ':' + (s ? s.status : 'empty') + ':' + rosterOf(id).color;
+  }).join('|');
+  if (sig === lastWireSig) return;               // 状態が変わらない限り作り直さない
+  lastWireSig = sig;
 
-    function connectWebSocket() {
-      ws = new WebSocket(WS_URL);
+  const ns = 'http://www.w3.org/2000/svg';
+  const wires = document.getElementById('wires'), marks = document.getElementById('marks');
+  wires.innerHTML = ''; marks.innerHTML = '';
+  const add = (parent, t, at, style) => {
+    const n = document.createElementNS(ns, t);
+    for (const k in at) n.setAttribute(k, at[k]);
+    if (style) n.style.cssText = style;
+    parent.appendChild(n); return n;
+  };
+  [150, 212, 274].forEach(r => add(wires, 'circle', { cx:CX, cy:CY, r, fill:'none', stroke:'#14243A', 'stroke-width':.9, 'stroke-dasharray':'2 9' }));
 
-      ws.onopen = () => {
-        console.log('WebSocket connected');
-        updateConnectionStatus(true);
-      };
+  [1,2,3,4,5,6].forEach(id => {
+    const r = rosterOf(id), s = sessionOfSlot(id);
+    const st = s ? (STATUS[s.status] || STATUS.idle) : null;
+    const w = WIRE[st ? st.wire : 'off'];
+    const p = slotPos(id);
+    const dx = CX - p.x, dy = CY - p.y, L = Math.hypot(dx, dy) || 1;
+    const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+    const sx = p.x + ux * 48, sy = p.y + uy * 48;
+    const ex = CX - ux * ORB_R, ey = CY - uy * ORB_R;
+    for (let k = -1; k <= 1; k++) {
+      const mx = (sx + ex) / 2 + nx * k * 17, my = (sy + ey) / 2 + ny * k * 17;
+      const d = `M${sx + nx * k * 5},${sy + ny * k * 5} Q${mx},${my} ${ex + nx * k * 4},${ey + ny * k * 4}`;
+      add(wires, 'path', {
+        d, fill:'none', stroke:r.color, 'stroke-width': k === 0 ? w.w : w.w * .7,
+        opacity: k === 0 ? w.o : w.o * .6, 'stroke-dasharray': w.dash
+      }, w.anim ? `animation:${w.anim};animation-delay:${(k + 1) * .16}s` : '');
+    }
+    add(wires, 'circle', { cx:ex, cy:ey, r:4.2, fill:'#08111F', stroke:r.color, 'stroke-width':1.3, opacity: st ? .9 : .3 });
 
-      ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        if (message.type === 'initial_state' || message.type === 'state_update') {
-          state = message.data;
-          // Don't re-render mid-edit or the name input would be wiped out
-          if (editingTask === null) render();
-        }
-      };
+    // 判断待ちは配線上にゲート記号
+    if (s && s.status === 'awaiting-approval') {
+      const gx = sx + (ex - sx) * .34, gy = sy + (ey - sy) * .34;
+      add(marks, 'circle', { cx:gx, cy:gy, r:13, fill:'#12111A', stroke:'#FBBF24', 'stroke-width':2 });
+      add(marks, 'path', { d:`M${gx - 6},${gy} h12 M${gx},${gy - 6} v12`, stroke:'#FBBF24', 'stroke-width':2, 'stroke-linecap':'round' });
+    }
+  });
+}
 
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        updateConnectionStatus(false);
-        setTimeout(connectWebSocket, 3000);
-      };
+/* ---------- スロット（DOMは一度作って以後は更新のみ） ---------- */
+function ensureSlot(id) {
+  if (slotEls[id]) return slotEls[id];
+  const p = slotPos(id);
+  const root = el('div', 'slot', `left:${p.x}px;top:${p.y}px`);
+  const av = el('div', 'av');
+  const ring = el('div', '', 'position:absolute;inset:-9px;border-radius:50%;border:2px solid #FBBF24;animation:pulseRing 1.3s ease-in-out infinite;display:none');
+  const avWrap = el('div', '', 'position:relative');
+  avWrap.appendChild(ring); avWrap.appendChild(av);
+  const nm = el('div', 'nm');
+  const tk = el('div', 'tk');
+  const st = el('div', 'st');
+  const row = el('div', 'row');
+  const reset = el('button', 'mini'); reset.textContent = '⟲'; reset.title = 'タイマーをリセット';
+  const kill = el('button', 'mini'); kill.textContent = '✕'; kill.title = 'スロットから外す';
+  const jump = el('button', 'mini'); jump.textContent = '↗︎ タブ'; jump.title = 'タブへジャンプ'; jump.style.display = 'none';
+  row.appendChild(reset); row.appendChild(jump); row.appendChild(kill);
+  const assign = el('button', 'assign'); assign.textContent = '＋ 割り当てる';
+  assign.onclick = openConnect;
+  [avWrap, nm, tk, st, row, assign].forEach(n => root.appendChild(n));
+  document.getElementById('stage').appendChild(root);
+  slotEls[id] = { root, av, ring, nm, tk, st, row, reset, kill, jump, assign };
+  return slotEls[id];
+}
 
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
+function renderSlots() {
+  [1,2,3,4,5,6].forEach(id => {
+    const r = rosterOf(id), s = sessionOfSlot(id), e = ensureSlot(id);
+    const look = { id:'slot' + id, color:r.color, body:r.body, deco:r.deco, visor:r.visor, mark:r.mark };
+    const avState = s ? (STATUS[s.status] || STATUS.idle).av : 'idle';
+    const key = r.color + '|' + avState;
+    if (lastAvatar[id] !== key && typeof window.avatarSvg === 'function') {
+      e.av.innerHTML = window.avatarSvg(look, avState, 70); lastAvatar[id] = key;
     }
 
-    function updateConnectionStatus(connected) {
-      const statusEl = document.getElementById('connectionStatus');
-      if (connected) {
-        statusEl.textContent = '接続中';
-        statusEl.className = 'connection-status connected';
-      } else {
-        statusEl.textContent = '接続なし';
-        statusEl.className = 'connection-status disconnected';
-      }
+    e.nm.textContent = r.name;
+    if (!s) {                                    // 空き：キャラを薄く残す
+      e.av.style.opacity = .42;
+      e.av.style.animation = 'none';
+      e.ring.style.display = 'none';
+      e.nm.style.color = '#3F4C61';
+      e.tk.textContent = '空き'; e.tk.style.color = '#2F3B4D'; e.tk.style.cursor = 'default'; e.tk.onclick = null;
+      e.st.textContent = ''; e.row.style.display = 'none'; e.assign.style.display = '';
+      return;
+    }
+    const st = STATUS[s.status] || STATUS.idle;
+    e.av.style.opacity = 1;
+    e.av.style.animation = s.status === 'working' ? 'bob .9s ease-in-out infinite' : 'none';
+    e.ring.style.display = s.status === 'awaiting-approval' ? '' : 'none';
+    e.nm.style.color = '#E6EDF7';
+    e.row.style.display = ''; e.assign.style.display = 'none';
+    e.kill.onclick = () => clearSession(s.session_id);
+    if (s.browser) {                              // ブラウザAI: タイマー無し、タブへジャンプ
+      e.reset.style.display = 'none';
+      e.jump.style.display = ''; e.jump.onclick = () => jumpToTab(s.url);
+    } else {
+      e.reset.style.display = ''; e.reset.onclick = () => resetTimer(s.session_id);
+      e.jump.style.display = 'none';
     }
 
-    function formatTime(ms) {
-      if (!ms) return '-';
-      const seconds = Math.floor(ms / 1000);
-      const minutes = Math.floor(seconds / 60);
-      if (minutes > 0) return `${minutes}分${seconds % 60}秒`;
-      return `${seconds}秒`;
+    if (editingTask !== s.session_id) {
+      e.tk.style.color = r.color; e.tk.style.cursor = 'pointer';
+      e.tk.textContent = s.task || '作業名を入力…';
+      if (!s.task) e.tk.style.color = '#3F4C61';
+      e.tk.onclick = () => startEditTask(s.session_id, e, s.task || '');
     }
-
-    function render() {
-      renderApprovals();
-      renderSlots();
-      renderQueue();
+    const elapsed = Date.now() - (s.status_changed_at || Date.now());
+    let label = st.label, color = st.color;
+    if (s.browser) {                              // ブラウザAIは生成中/確認してねの語で
+      if (s.status === 'working') { label = '● 生成中'; }
+      else if (s.status === 'awaiting-input') { label = '✅ 確認してね'; color = '#FBBF24'; }
+      else { label = '🌐 表示中'; }
     }
+    e.st.style.color = color;
+    e.st.textContent = `${label} ${fmt(elapsed)}`;
+  });
+}
 
-    // Auto-refresh UI every 1 second to update elapsed time
-    // (skip while editing a name so the input isn't wiped out)
-    setInterval(() => {
-      if (ws && ws.readyState === 1 && editingTask === null) {
-        render();
-      }
-    }, 1000);
+function startEditTask(sid, e, cur) {
+  editingTask = sid;
+  const input = el('input', 'taskin'); input.value = cur; input.placeholder = '作業名を入力';
+  e.tk.replaceWith(input); input.focus(); input.select();
+  const done = save => {
+    editingTask = null;
+    const tk = el('div', 'tk'); input.replaceWith(tk); e.tk = tk;
+    if (save) saveTask(sid, input.value); else render();
+  };
+  // IME 変換確定の Enter は保存しない（日本語入力の二重確定防止）
+  input.onkeydown = ev => { if (ev.key === 'Enter' && !ev.isComposing && ev.keyCode !== 229) done(true); else if (ev.key === 'Escape') done(false); };
+  input.onblur = () => { if (editingTask === sid) done(true); };
+}
 
-    // 承認 → 表示カード（session）の対応。フックは UUID キー、カードは
-    // pid-*/ui-* キーのことがあるので card_session_id を優先して突き合わせる。
-    function approvalForSession(sessionId) {
-      return Object.values(state.pendingApprovals || {})
-        .find(a => (a.card_session_id || a.session_id) === sessionId);
+/* ---------- 吹き出し（判断待ち／入力待ち） ---------- */
+function renderBubbles() {
+  document.querySelectorAll('.bubble').forEach(n => n.remove());
+  const stage = document.getElementById('stage');
+  const shown = new Set();
+
+  Object.values(state.sessions || {}).forEach(s => {
+    const a = approvalOfSession(s.session_id);
+    const r = rosterOf(s.slot_id);
+    const p = slotPos(s.slot_id);
+    const right = p.x > CX;
+    if (a) {
+      shown.add(a.id);
+      const b = el('div', 'bubble appr', `${right ? 'left:' + Math.min(700, p.x + 90) + 'px' : 'left:' + Math.max(8, p.x - 390) + 'px'};top:${Math.max(4, p.y - 70)}px`);
+      b.innerHTML = `<h4>${esc(r.name)}が判断を待っています 🔧 ${esc(a.tool_name || '')}</h4>
+        <div class="cmd">${esc(cmdOf(a))}</div>
+        <div class="bb"><button class="allow">✓ 許可</button><button class="deny">✕ 拒否</button></div>
+        <button class="more">詳細を見る ›</button>`;
+      b.querySelector('.allow').onclick = () => decide(a.id, 'allow');
+      b.querySelector('.deny').onclick = () => decide(a.id, 'deny');
+      b.querySelector('.more').onclick = () => openDetail(a.id);
+      stage.appendChild(b);
+    } else if (s.status === 'awaiting-input') {
+      const b = el('div', 'bubble inp', `${right ? 'left:' + Math.min(730, p.x + 90) + 'px' : 'left:' + Math.max(8, p.x - 360) + 'px'};top:${Math.max(4, p.y - 40)}px`);
+      const head = s.browser ? `${esc(r.name)}の回答が完了！確認してね 👀` : `${esc(r.name)}が入力を待ってます 💬`;
+      const body = s.browser ? 'ブラウザのタブで確認できます' : `${esc(s.detail || '入力待ち')}<span style="animation:caret 1s step-end infinite">_</span>`;
+      b.innerHTML = `<h4>${head}</h4><div class="cmd">${body}</div>`;
+      stage.appendChild(b);
     }
+  });
 
-    // Bash コマンド等、判断対象の中身を短く取り出す
-    function approvalSummary(approval) {
-      const ti = approval.tool_input || {};
-      if (typeof ti.command === 'string') return ti.command;
-      return JSON.stringify(ti);
-    }
+  // スロットに紐づかない承認はステージ上部にフォールバック表示
+  Object.values(state.pendingApprovals || {}).filter(a => !shown.has(a.id)).forEach((a, i) => {
+    const b = el('div', 'bubble appr', `left:${350 + i * 24}px;top:${8 + i * 20}px`);
+    b.innerHTML = `<h4>判断待ち 🔧 ${esc(a.tool_name || '')}</h4>
+      <div class="cmd">${esc(cmdOf(a))}</div>
+      <div class="bb"><button class="allow">✓ 許可</button><button class="deny">✕ 拒否</button></div>`;
+    b.querySelector('.allow').onclick = () => decide(a.id, 'allow');
+    b.querySelector('.deny').onclick = () => decide(a.id, 'deny');
+    document.getElementById('stage').appendChild(b);
+  });
+}
 
-    function renderApprovals() {
-      const container = document.getElementById('approvalsContainer');
-      const section = document.getElementById('approvalsSection');
-      // スロットに出ている承認は各キャラの吹き出しで扱うので、ここには
-      // カードが存在しない「スロット外」の承認だけをフォールバック表示する。
-      const shownIds = new Set(
-        Object.values(state.sessions || {}).map(s => s.session_id)
-      );
-      const approvals = Object.values(state.pendingApprovals || {})
-        .filter(a => !shownIds.has(a.card_session_id || a.session_id));
+/* ---------- ヘッダーのカウント・キュー ---------- */
+function renderCounts() {
+  const c = { working:0, 'awaiting-approval':0, 'awaiting-input':0, idle:0, done:0, error:0 };
+  Object.values(state.sessions || {}).forEach(s => { if (c[s.status] != null) c[s.status]++; });
+  const empty = 6 - Object.values(state.sessions || {}).length;
+  document.getElementById('counts').innerHTML =
+    `<span style="color:#34D399">●${c.working}</span>
+     <span style="color:#FBBF24">◉${c['awaiting-approval']}</span>
+     <span style="color:#60A5FA">◐${c['awaiting-input']}</span>
+     <span style="color:#8494AC">○${c.idle + c.done}</span>
+     <span style="color:#3F4C61">空き${Math.max(0, empty)}</span>`;
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+function renderQueue() {
+  const q = state.queue || [], box = document.getElementById('queue');
+  box.innerHTML = q.length
+    ? q.map((it, i) => `<div class="chip">#${i + 1} ${esc(it.cwd ? it.cwd.split('/').pop() : 'unknown')} · ${esc((it.session_id || '').substring(0, 8))}</div>`).join('')
+    : '<div class="chip">空</div>';
+}
 
-      if (approvals.length === 0) {
-        section.style.display = 'none';
-        return;
-      }
+function render() {
+  renderWires(); renderSlots(); renderBubbles(); renderCounts(); renderQueue();
+}
 
-      section.style.display = 'block';
-      container.innerHTML = approvals.map(approval => {
-        const session = state.sessions[approval.session_id];
-        const toolInput = JSON.stringify(approval.tool_input, null, 2);
+/* ---------- API ---------- */
+async function decide(id, decision) {
+  try { await fetch(`${API}/api/approvals/${id}/decision`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ decision, reason:'' }) }); }
+  catch (e) { console.error(e); }
+}
+async function resetTimer(sid) {
+  try { await fetch(`${API}/api/sessions/${sid}/reset-timer`, { method:'POST' }); } catch (e) { console.error(e); }
+}
+async function saveTask(sid, task) {
+  try { await fetch(`${API}/api/sessions/${sid}/task`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ task }) }); }
+  catch (e) { console.error(e); }
+  render();
+}
+async function clearSession(sid) {
+  try { await fetch(`${API}/api/sessions/${sid}`, { method:'DELETE' }); } catch (e) { console.error(e); }
+  render();
+}
+async function clearAll() {
+  try { await fetch(`${API}/api/sessions/clear`, { method:'POST' }); } catch (e) { console.error(e); }
+  render();
+}
+async function jumpToTab(url) {
+  if (!url) return;
+  try { await fetch(`${API}/api/tabs/activate`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ url }) }); }
+  catch (e) { console.error(e); }
+}
 
-        return `
-          <div class="approval-card">
-            <div class="approval-header">
-              ${session ? `<span class="character-badge" style="background-color: ${session.color}"></span>` : ''}
-              <div>
-                <div class="character-name">${session?.character_name || 'Unknown'}</div>
-                <div class="session-info">🔗 ${approval.session_id.substring(0, 8)}</div>
-              </div>
-            </div>
-            <div style="margin-bottom: 12px; color: #666; font-weight: bold;">
-              🔧 ${approval.tool_name}
-            </div>
-            <div class="approval-tool">
-              ${escapeHtml(toolInput)}
-            </div>
-            <div class="approval-buttons">
-              <button class="approval-btn approval-btn-allow" onclick="makeDecision('${approval.id}', 'allow')">
-                ✓ 許可
-              </button>
-              <button class="approval-btn approval-btn-deny" onclick="makeDecision('${approval.id}', 'deny')">
-                ✕ 拒否
-              </button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // 判断内容の詳細モーダル
-    function openDetail(approvalId) {
-      const approval = (state.pendingApprovals || {})[approvalId];
-      if (!approval) return;
-      const session = state.sessions[approval.card_session_id] ||
-        state.sessions[approval.session_id] || {};
-      const elapsed = formatTime(Date.now() - (approval.created_at || Date.now()));
-      const cwd = approval.cwd || session.cwd || '-';
-
-      document.getElementById('detailTitle').textContent =
-        `${session.character_name || 'AI'} の判断待ち`;
-      document.getElementById('detailBody').innerHTML = `
-        <div class="detail-row">
-          <div class="detail-label">キャラクター / AI</div>
-          <div class="detail-value">${escapeHtml(session.character_name || '-')}${session.model_name ? ' · ' + escapeHtml(session.model_name) : ''}</div>
+/* ---------- 接続モーダル ---------- */
+function openConnect() { document.getElementById('connectModal').classList.add('open'); refreshDiscover(); }
+function closeConnect() { document.getElementById('connectModal').classList.remove('open'); }
+async function refreshDiscover() {
+  const list = document.getElementById('discoverList');
+  list.innerHTML = '<div class="hint" style="text-align:center">読み込み中...</div>';
+  try {
+    const res = await fetch(`${API}/api/discover`);
+    const data = await res.json();
+    discovered = data.sessions || [];
+    const tabs = data.tabs || [];
+    if (!discovered.length && !tabs.length) { list.innerHTML = '<div class="hint" style="text-align:center">稼働中の AI が見つかりません</div>'; return; }
+    const procHtml = discovered.map((s, i) => `
+      <div class="item">
+        <div>
+          <div class="p">📁 ${esc(s.project)}</div>
+          <div class="m">PID ${esc(String(s.pid))}${s.started ? ' · ' + esc(s.started) : ''}</div>
         </div>
-        <div class="detail-row">
-          <div class="detail-label">ツール</div>
-          <div class="detail-value">🔧 ${escapeHtml(approval.tool_name || '-')}</div>
+        ${s.connected ? '<span class="m">接続済み</span>' : `<button class="btn" data-i="${i}">接続</button>`}
+      </div>`).join('');
+    const tabHtml = tabs.map((t, i) => `
+      <div class="item">
+        <div style="min-width:0;">
+          <div class="p">🌐 ${esc(t.project)}</div>
+          <div class="m" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;">${esc(t.ai_name)} · ${esc(t.url)}</div>
         </div>
-        <div class="detail-row">
-          <div class="detail-label">内容</div>
-          <div class="detail-value">${escapeHtml(approvalSummary(approval))}</div>
-        </div>
-        <div class="detail-row">
-          <div class="detail-label">作業ディレクトリ</div>
-          <div class="detail-value">${escapeHtml(cwd)}</div>
-        </div>
-        <div class="detail-row">
-          <div class="detail-label">経過</div>
-          <div class="detail-value">⏱️ ${elapsed}</div>
-        </div>
-      `;
-      document.getElementById('detailActions').innerHTML = `
-        <button class="bubble-btn bubble-btn-allow" style="flex:1;padding:12px;" onclick="makeDecision('${approval.id}', 'allow'); closeDetail();">✓ 許可</button>
-        <button class="bubble-btn bubble-btn-deny" style="flex:1;padding:12px;" onclick="makeDecision('${approval.id}', 'deny'); closeDetail();">✕ 拒否</button>
-      `;
-      document.getElementById('detailModal').style.display = 'flex';
+        ${t.connected ? '<span class="m">接続済み</span>' : `<button class="btn" data-t="${i}">接続</button>`}
+      </div>`).join('');
+    list.innerHTML =
+      (procHtml ? `<div class="hint">🖥 ネイティブ（Claude Code等・ライブ連携）</div>${procHtml}` : '') +
+      (tabHtml ? `<div class="hint" style="margin-top:12px">🌐 ブラウザのAI（存在表示・生成検知）</div>${tabHtml}` : '');
+    list.querySelectorAll('button[data-i]').forEach(b => b.onclick = () => connectDiscovered(discovered[+b.dataset.i]));
+    list.querySelectorAll('button[data-t]').forEach(b => b.onclick = () => connectTab(tabs[+b.dataset.t]));
+  } catch (e) {
+    list.innerHTML = '<div class="hint" style="text-align:center;color:#FCA5A5">検知に失敗しました</div>';
+  }
+}
+async function connectDiscovered(s) {
+  if (!s) return;
+  try {
+    await fetch(`${API}/api/events`, {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({
+        adapter:'discovered', session_id:s.session_id, cwd:s.cwd || ('/' + s.project),
+        kind:'start', model_name:s.ai_name || 'AI', detail:'接続しました', ts:Math.floor(Date.now() / 1000)
+      })
+    });
+    refreshDiscover(); render();
+  } catch (e) { console.error(e); }
+}
+async function connectTab(t) {
+  if (!t) return;
+  try {
+    await fetch(`${API}/api/events`, {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({
+        adapter:'browser', session_id:t.session_id, cwd:t.url, url:t.url,
+        kind:'start', model_name:t.ai_name || 'AI', detail:'ブラウザで開いています', ts:Math.floor(Date.now() / 1000)
+      })
+    });
+    refreshDiscover(); render();
+  } catch (e) { console.error(e); }
+}
+
+/* ---------- 詳細モーダル ---------- */
+function openDetail(id) {
+  const a = (state.pendingApprovals || {})[id];
+  if (!a) return;
+  const s = state.sessions[a.card_session_id] || state.sessions[a.session_id] || {};
+  const r = rosterOf(s.slot_id);
+  document.getElementById('detailTitle').textContent = `${r.name || 'AI'} の判断待ち`;
+  document.getElementById('detailBody').innerHTML = `
+    <div class="drow"><div class="dlabel">キャラクター / AI</div><div class="dval">${esc(r.name || '-')}${s.model_name ? ' · ' + esc(s.model_name) : ''}</div></div>
+    <div class="drow"><div class="dlabel">ツール</div><div class="dval">🔧 ${esc(a.tool_name || '-')}</div></div>
+    <div class="drow"><div class="dlabel">内容</div><div class="dval">${esc(cmdOf(a))}</div></div>
+    <div class="drow"><div class="dlabel">作業ディレクトリ</div><div class="dval">${esc(a.cwd || s.cwd || '-')}</div></div>
+    <div class="drow"><div class="dlabel">経過</div><div class="dval">⏱️ ${fmt(Date.now() - (a.created_at || Date.now()))}</div></div>`;
+  const act = document.getElementById('detailActions');
+  act.innerHTML = '<button class="allow">✓ 許可</button><button class="deny">✕ 拒否</button>';
+  act.querySelector('.allow').onclick = () => { decide(a.id, 'allow'); closeDetail(); };
+  act.querySelector('.deny').onclick = () => { decide(a.id, 'deny'); closeDetail(); };
+  document.getElementById('detailModal').classList.add('open');
+}
+function closeDetail() { document.getElementById('detailModal').classList.remove('open'); }
+
+/* ---------- WebSocket ---------- */
+function connectWS() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => {
+    const c = document.getElementById('conn');
+    c.textContent = '● 接続中'; c.className = 'conn mono';
+  };
+  ws.onmessage = ev => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'initial_state' || msg.type === 'state_update') {
+      const before = activeSources().length;
+      state = msg.data;
+      if (editingTask === null) render();
+      if (before === 0 && activeSources().length > 0) fireBeams();
     }
+  };
+  ws.onclose = () => {
+    const c = document.getElementById('conn');
+    c.textContent = '接続なし'; c.className = 'conn off mono';
+    setTimeout(connectWS, 3000);
+  };
+  ws.onerror = e => console.error('WebSocket error', e);
+}
 
-    function closeDetail() {
-      document.getElementById('detailModal').style.display = 'none';
-    }
+/* ---------- 起動 ---------- */
+function fitShell() {
+  const s = Math.min(1, (window.innerWidth - 40) / 1060);
+  document.getElementById('shell').style.transform = `scale(${s})`;
+}
+window.addEventListener('resize', fitShell);
 
-    async function makeDecision(approvalId, decision) {
-      try {
-        const response = await fetch(`http://${window.location.hostname}:4317/api/approvals/${approvalId}/decision`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ decision, reason: '' })
-        });
-        if (response.ok) {
-          console.log(`Approval ${approvalId} decided: ${decision}`);
-        }
-      } catch (error) {
-        console.error('Error making decision:', error);
-      }
-    }
-
-    async function resetTimer(sessionId) {
-      try {
-        const response = await fetch(`http://${window.location.hostname}:4317/api/sessions/${sessionId}/reset-timer`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        if (response.ok) {
-          console.log(`Timer reset for session ${sessionId}`);
-        }
-      } catch (error) {
-        console.error('Error resetting timer:', error);
-      }
-    }
-
-    let editingTask = null; // 作業名を編集中のセッションID
-
-    function startEditTask(sessionId) {
-      editingTask = sessionId;
-      render();
-      setTimeout(() => {
-        const el = document.getElementById('task-input');
-        if (el) { el.focus(); el.select(); }
-      }, 0);
-    }
-
-    function cancelEditTask() {
-      editingTask = null;
-      render();
-    }
-
-    async function saveTask(sessionId, task) {
-      editingTask = null;
-      try {
-        await fetch(`http://${window.location.hostname}:4317/api/sessions/${sessionId}/task`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task })
-        });
-        render();
-      } catch (error) {
-        console.error('Error saving task:', error);
-      }
-    }
-
-    // anima のステータス → アバターの状態
-    function toAvatarState(status) {
-      if (status === 'working') return 'working';
-      if (status === 'awaiting-approval' || status === 'awaiting-input') return 'waiting';
-      if (status === 'done') return 'done';
-      if (status === 'error') return 'error';
-      return 'idle';
-    }
-
-    // 作業名エリア（クリックで編集 = カスタマイズ対象）
-    function taskBlock(session) {
-      const task = session.task || '';
-      if (editingTask === session.session_id) {
-        return `
-          <input id="task-input" type="text" value="${escapeHtml(task)}" placeholder="作業名を入力"
-            onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229){this.blur();}else if(event.key==='Escape'){this.dataset.cancel='1';this.blur();}"
-            onblur="if(this.dataset.cancel){cancelEditTask();}else{saveTask('${session.session_id}', this.value);}"
-            style="font-size:14px;padding:6px 8px;border:1px solid #4ECDC4;border-radius:6px;width:100%;box-sizing:border-box;">
-        `;
-      }
-      return `
-        <div class="task-display" onclick="startEditTask('${session.session_id}')" title="クリックで作業名を編集">
-          <span style="flex:1;text-align:left;color:${task ? '#333' : '#bbb'};font-size:14px;">${task ? escapeHtml(task) : '作業名を入力…'}</span>
-          <span style="font-size:12px;">✏️</span>
-        </div>
-      `;
-    }
-
-    function renderSlots() {
-      const container = document.getElementById('slotsContainer');
-      const rosterSlots = state.roster || [];
-      const slots = Array.from({ length: 6 }, (_, i) => i + 1);
-
-      container.innerHTML = slots.map(slotId => {
-        const char = rosterSlots.find(r => r.id === slotId) ||
-          { id: slotId, name: `スロット ${slotId}`, color: '#999', body: 'slim', deco: 'none', visor: 'band', mark: 'bar' };
-        const look = { id: 'slot' + slotId, color: char.color, body: char.body, deco: char.deco, visor: char.visor, mark: char.mark };
-        const session = Object.values(state.sessions || {}).find(s => s.slot_id === slotId);
-
-        if (!session) {
-          const svg = window.avatarSvg(look, 'idle', 64);
-          return `
-            <div class="slot-card slot-empty-v2">
-              <div class="avatar" style="opacity:.5;">${svg}</div>
-              <div class="char-name" style="color:#bbb;">${escapeHtml(char.name)}</div>
-              <div style="color:#ccc;font-size:12px;margin-top:6px;">空き</div>
-            </div>
-          `;
-        }
-
-        const statusInfo = statusMap[session.status] || { badge: '不明', class: 'status-idle' };
-        const elapsedMs = Date.now() - (session.status_changed_at || Date.now());
-        const working = session.status === 'working';
-        const svg = window.avatarSvg(look, toAvatarState(session.status), 72);
-        const timerLabel = session.status === 'idle' ? '返信待ち ' : working ? '作業中 ' : '';
-
-        // 判断が必要なとき、キャラの上に吹き出しを出す
-        const approval = approvalForSession(session.session_id);
-        let bubble = '';
-        if (approval) {
-          bubble = `
-            <div class="bubble">
-              <div class="bubble-msg">${escapeHtml(char.name)}が判断を待ってます 🔧 ${escapeHtml(approval.tool_name || '')}</div>
-              <div class="bubble-cmd">${escapeHtml(approvalSummary(approval))}</div>
-              <div class="bubble-buttons">
-                <button class="bubble-btn bubble-btn-allow" onclick="makeDecision('${approval.id}', 'allow')">✓ 許可</button>
-                <button class="bubble-btn bubble-btn-deny" onclick="makeDecision('${approval.id}', 'deny')">✕ 拒否</button>
-              </div>
-              <button class="bubble-detail" onclick="openDetail('${approval.id}')">詳細を見る ›</button>
-            </div>
-          `;
-        } else if (session.status === 'awaiting-input') {
-          bubble = `
-            <div class="bubble bubble-input">
-              <div class="bubble-msg">${escapeHtml(char.name)}が入力を待ってます 💬</div>
-              <div class="bubble-cmd">${escapeHtml(session.detail || '入力待ち')}</div>
-            </div>
-          `;
-        }
-
-        // ブラウザタブAI。生成中/完了はタブDOMのポーリングで反映（Tier2）。
-        if (session.browser) {
-          // 状態バッジ＋吹き出し: 生成中(緑) / 確認してね(橙・注目) / 待機(青)
-          let bBadge, bStyle, bAvatarCls = '', bBubble = '';
-          if (session.status === 'working') {
-            bBadge = '🟢 生成中…'; bStyle = 'background:#DCFCE7;color:#166534;'; bAvatarCls = 'avatar-working';
-            bBubble = `<div class="bubble bubble-work"><div class="bubble-msg">${escapeHtml(char.name)}は作業中…✍️</div></div>`;
-          } else if (session.status === 'awaiting-input') {
-            const ago = formatTime(Date.now() - (session.status_changed_at || Date.now()));
-            bBadge = `✅ 回答完了・確認してね（${ago}前）`; bStyle = 'background:#FEF3C7;color:#92400E;'; bAvatarCls = 'avatar-waiting';
-            bBubble = `<div class="bubble bubble-done"><div class="bubble-msg">回答できたよ、確認してね！👀</div></div>`;
-          } else {
-            bBadge = '🌐 ブラウザで表示中'; bStyle = 'background:#EEF2FF;color:#4338CA;';
-          }
-          const attention = session.status === 'awaiting-input'
-            ? 'box-shadow:0 0 0 3px #FDE68A, 0 4px 14px rgba(217,119,6,.25);' : '';
-          return `
-            <div class="slot-card" style="${attention}">
-              ${bBubble}
-              <div class="avatar ${bAvatarCls}" style="opacity:.95;">${svg}</div>
-              <div class="char-name">${escapeHtml(char.name)}</div>
-              <div class="char-model">${session.model_name ? '🌐 ' + escapeHtml(session.model_name) : '🌐 ブラウザ'}</div>
-              ${taskBlock(session)}
-              <div class="status-badge" style="margin-top:10px;${bStyle}">${bBadge}</div>
-              <button data-url="${escapeHtml(session.url || '')}" onclick="jumpToTab(this.dataset.url)"
-                style="width:100%;margin:8px 0;padding:9px;border:none;border-radius:6px;background:#4338CA;color:#fff;font-weight:bold;font-size:13px;cursor:pointer;">↗︎ タブへジャンプ</button>
-              <div style="display:flex;justify-content:flex-end;">
-                <button onclick="clearSession('${session.session_id}')" title="スロットから外す" style="padding:4px 8px;font-size:11px;border:none;background:#f0d0d0;border-radius:4px;cursor:pointer;">✕</button>
-              </div>
-            </div>
-          `;
-        }
-
-        return `
-          <div class="slot-card">
-            ${bubble}
-            <div class="avatar ${working ? 'avatar-working' : ''}">${svg}</div>
-            <div class="char-name">${escapeHtml(char.name)}</div>
-            <div class="char-model">${session.model_name ? '🤖 ' + escapeHtml(session.model_name) : ''}</div>
-            ${taskBlock(session)}
-            <div class="status-badge ${statusInfo.class}" style="margin-top:10px;">${statusInfo.badge}</div>
-            ${bubble ? '' : `<div class="activity-text">${session.detail ? escapeHtml(session.detail) : 'アクティビティなし'}</div>`}
-            <div class="session-info" style="margin-bottom:6px;">📁 ${session.cwd ? escapeHtml(session.cwd.split('/').pop()) : 'unknown'} · 🔗 ${escapeHtml(session.session_id.substring(0, 8))}</div>
-            <div class="elapsed-time" style="display:flex;justify-content:space-between;align-items:center;">
-              <span>⏱️ ${timerLabel}${formatTime(elapsedMs)}</span>
-              <div>
-                <button onclick="resetTimer('${session.session_id}')" title="タイマーをリセット" style="padding:4px 8px;font-size:11px;border:none;background:#ddd;border-radius:4px;cursor:pointer;">⟲</button>
-                <button onclick="clearSession('${session.session_id}')" title="スロットから外す" style="padding:4px 8px;font-size:11px;border:none;background:#f0d0d0;border-radius:4px;cursor:pointer;">✕</button>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    async function clearSession(sessionId) {
-      try {
-        await fetch(`http://${window.location.hostname}:4317/api/sessions/${sessionId}`, { method: 'DELETE' });
-        render();
-      } catch (error) {
-        console.error('Error clearing session:', error);
-      }
-    }
-
-    async function clearAllSessions() {
-      try {
-        await fetch(`http://${window.location.hostname}:4317/api/sessions/clear`, { method: 'POST' });
-        render();
-      } catch (error) {
-        console.error('Error clearing all sessions:', error);
-      }
-    }
-
-    // --- 接続モーダル（稼働中セッションの検知＆選択） ---
-    function openConnectModal() {
-      document.getElementById('connectModal').style.display = 'flex';
-      refreshDiscover();
-    }
-
-    function closeConnectModal() {
-      document.getElementById('connectModal').style.display = 'none';
-    }
-
-    let discoveredSessions = [];
-    let discoveredTabs = [];
-
-    async function refreshDiscover() {
-      const list = document.getElementById('discoverList');
-      list.innerHTML = '<div style="color:#999;font-size:13px;text-align:center;padding:20px;">読み込み中...</div>';
-      try {
-        const res = await fetch(`http://${window.location.hostname}:4317/api/discover`);
-        const data = await res.json();
-        discoveredSessions = data.sessions || [];
-        discoveredTabs = data.tabs || [];
-
-        if (discoveredSessions.length === 0 && discoveredTabs.length === 0) {
-          list.innerHTML = '<div style="color:#999;font-size:13px;text-align:center;padding:20px;">稼働中の AI が見つかりません</div>';
-          return;
-        }
-
-        const connectBtn = (onclick) =>
-          `<button onclick="${onclick}" style="padding:6px 14px;font-size:12px;border:none;background:#4ECDC4;color:white;font-weight:bold;border-radius:6px;cursor:pointer;">接続</button>`;
-        const doneBadge =
-          `<span style="padding:6px 14px;font-size:12px;color:#999;background:#f0f0f0;border-radius:6px;">接続済み</span>`;
-
-        const procHtml = discoveredSessions.map((s, i) => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid #eee;border-radius:8px;margin-bottom:8px;">
-              <div>
-                <div style="font-weight:bold;color:#333;">📁 ${escapeHtml(s.project)}</div>
-                <div style="font-size:11px;color:#999;font-family:Monaco,monospace;">PID ${s.pid}${s.started ? ' · ' + escapeHtml(s.started) : ''}</div>
-              </div>
-              ${s.connected ? doneBadge : connectBtn(`connectDiscoveredByIndex(${i})`)}
-            </div>`).join('');
-
-        const tabsHtml = discoveredTabs.map((t, i) => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid #eee;border-radius:8px;margin-bottom:8px;">
-              <div style="min-width:0;">
-                <div style="font-weight:bold;color:#333;">🌐 ${escapeHtml(t.project)}</div>
-                <div style="font-size:11px;color:#999;font-family:Monaco,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;">${escapeHtml(t.ai_name)} · ${escapeHtml(t.url)}</div>
-              </div>
-              ${t.connected ? doneBadge : connectBtn(`connectTabByIndex(${i})`)}
-            </div>`).join('');
-
-        list.innerHTML =
-          (procHtml ? `<div style="font-size:11px;color:#999;margin:4px 0 8px;">🖥 ネイティブ（Claude Code等・ライブ連携）</div>${procHtml}` : '') +
-          (tabsHtml ? `<div style="font-size:11px;color:#999;margin:14px 0 8px;">🌐 ブラウザのAI（存在表示・タブへジャンプ）</div>${tabsHtml}` : '');
-      } catch (error) {
-        console.error('Error discovering sessions:', error);
-        list.innerHTML = '<div style="color:#c00;font-size:13px;text-align:center;padding:20px;">検知に失敗しました</div>';
-      }
-    }
-
-    function connectDiscoveredByIndex(i) {
-      const s = discoveredSessions[i];
-      if (s) connectDiscovered(s.session_id, s.cwd, s.project, s.ai_name);
-    }
-
-    function connectTabByIndex(i) {
-      const t = discoveredTabs[i];
-      if (t) connectBrowserTab(t);
-    }
-
-    async function connectDiscovered(sessionId, cwd, project, aiName) {
-      try {
-        await fetch(`http://${window.location.hostname}:4317/api/events`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            adapter: 'discovered',
-            session_id: sessionId,
-            cwd: cwd || ('/' + project),
-            kind: 'start',
-            model_name: aiName || 'AI',
-            detail: '接続しました',
-            ts: Math.floor(Date.now() / 1000)
-          })
-        });
-        refreshDiscover();
-        render();
-      } catch (error) {
-        console.error('Error connecting:', error);
-      }
-    }
-
-    // ブラウザタブAIの接続（Tier2/3: ライブ状態は無し、タブへジャンプ可）
-    async function connectBrowserTab(tab) {
-      try {
-        await fetch(`http://${window.location.hostname}:4317/api/events`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            adapter: 'browser',
-            session_id: tab.session_id,
-            cwd: tab.url,          // URLをキーに（フックのcwd紐づけと衝突しない）
-            url: tab.url,
-            kind: 'start',
-            model_name: tab.ai_name || 'AI',
-            detail: 'ブラウザで開いています',
-            ts: Math.floor(Date.now() / 1000)
-          })
-        });
-        refreshDiscover();
-        render();
-      } catch (error) {
-        console.error('Error connecting tab:', error);
-      }
-    }
-
-    async function jumpToTab(url) {
-      try {
-        await fetch(`http://${window.location.hostname}:4317/api/tabs/activate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
-        });
-      } catch (error) {
-        console.error('Error jumping to tab:', error);
-      }
-    }
-
-    function renderQueue() {
-      const container = document.getElementById('queueContainer');
-      const queue = state.queue || [];
-
-      if (queue.length === 0) {
-        container.innerHTML = '<div class="queue-item queue-empty">空</div>';
-      } else {
-        container.innerHTML = queue.map((item, index) => `
-          <div class="queue-item">
-            #${index + 1}: ${item.cwd ? item.cwd.split('/').pop() : 'unknown'} (${item.session_id.substring(0, 8)})
-          </div>
-        `).join('');
-      }
-    }
-
-    // Start
-    connectWebSocket();
-  </script>
+renderCore();
+render();
+fitShell();
+connectWS();
+setInterval(() => { if (editingTask === null) { renderSlots(); renderCounts(); } }, 1000);  // 経過時間だけ更新（光線は再生成しない）
+setInterval(fireBeams, 9600);                                                              // 光線のルート・色・タイミングを引き直す
+fireBeams();
+</script>
 </body>
 </html>

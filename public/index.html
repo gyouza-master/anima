@@ -787,7 +787,7 @@
       if (editingTask === session.session_id) {
         return `
           <input id="task-input" type="text" value="${escapeHtml(task)}" placeholder="作業名を入力"
-            onkeydown="if(event.key==='Enter'){this.blur();}else if(event.key==='Escape'){this.dataset.cancel='1';this.blur();}"
+            onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229){this.blur();}else if(event.key==='Escape'){this.dataset.cancel='1';this.blur();}"
             onblur="if(this.dataset.cancel){cancelEditTask();}else{saveTask('${session.session_id}', this.value);}"
             style="font-size:14px;padding:6px 8px;border:1px solid #4ECDC4;border-radius:6px;width:100%;box-sizing:border-box;">
         `;

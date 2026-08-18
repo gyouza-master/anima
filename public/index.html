@@ -9,7 +9,16 @@
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { background:#06090F; color:#E6EDF7; font-family:'Zen Kaku Gothic New',-apple-system,BlinkMacSystemFont,sans-serif; }
+  html { background:#06090F; }
+  body {
+    color:#E6EDF7; font-family:'Zen Kaku Gothic New',-apple-system,BlinkMacSystemFont,sans-serif;
+    background:
+      radial-gradient(1200px 820px at 50% -8%, rgba(56,189,248,.08), transparent 62%),
+      radial-gradient(880px 660px at 10% 88%, rgba(124,58,237,.07), transparent 58%),
+      radial-gradient(880px 660px at 90% 82%, rgba(236,72,153,.05), transparent 58%),
+      linear-gradient(180deg, #070B12 0%, #06090F 55%, #05070C 100%);
+    background-attachment:fixed;
+  }
   .mono { font-family:'IBM Plex Mono',Monaco,monospace; }
 
   @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
@@ -196,7 +205,7 @@ const STATUS = {
 let state = { sessions:{}, queue:[], pendingApprovals:{}, roster:[] };
 let ws = null, editingTask = null, discovered = [];
 const cardEls = {}, lastAvatar = {}, cardSide = {};
-let lastWireSig = '';
+let lastWireSig = '', lastBeamSig = '';
 
 const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; };
 const el = (tag, cls, css) => { const n = document.createElement(tag); if (cls) n.className = cls; if (css) n.style.cssText = css; return n; };
@@ -433,8 +442,12 @@ function activeSources() {
 }
 function fireBeams() {
   const beams = document.getElementById('beams'); if (!beams) return;
+  const src = activeSources();
+  const sig = src.map(s => s.c + ':' + s.ang).join('|');
+  if (sig === lastBeamSig) return;                 // 稼働が変わらない限り再生成しない＝連続して滑らかに流す
+  lastBeamSig = sig;
   beams.innerHTML = '';
-  const src = activeSources(); if (!src.length) return;
+  if (!src.length) return;
   const { pts, adj, C, R } = buildMesh();
   const rand = (a, b) => a + Math.random() * (b - a);
   const rimAt = deg => { const a = deg * Math.PI / 180, tx = C + Math.cos(a) * R, ty = C + Math.sin(a) * R; let best = 0, bd = Infinity; pts.forEach((p, i) => { const d = (p.x - tx) ** 2 + (p.y - ty) ** 2; if (d < bd) { bd = d; best = i; } }); return best; };
@@ -545,10 +558,9 @@ function connectWS() {
   ws.onmessage = ev => {
     const msg = JSON.parse(ev.data);
     if (msg.type === 'initial_state' || msg.type === 'state_update') {
-      const before = activeSources().length;
       state = msg.data;
       if (editingTask === null) render();
-      if (before === 0 && activeSources().length > 0) fireBeams();
+      fireBeams();                                   // sig 変化時のみ再生成（内部でガード）
     }
   };
   ws.onclose = () => { const c = document.getElementById('conn'); c.textContent = '接続なし'; c.className = 'conn off mono'; setTimeout(connectWS, 3000); };
@@ -560,7 +572,6 @@ renderCore();
 render();
 connectWS();
 setInterval(() => { if (editingTask === null) render(); }, 1000);
-setInterval(fireBeams, 9600);
 fireBeams();
 </script>
 </body>

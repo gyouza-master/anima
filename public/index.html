@@ -44,7 +44,7 @@
   .side { display:flex; flex-direction:column; justify-content:center; gap:20px; z-index:1; }
   .center { flex:1; display:flex; align-items:center; justify-content:center; position:relative; z-index:1; min-width:280px; }
   .glow { position:absolute; width:88%; aspect-ratio:1; border-radius:50%; background:radial-gradient(circle at 50% 50%, rgba(56,189,248,.12), rgba(6,9,15,0) 68%); }
-  .sphere { width:min(34vw,430px); aspect-ratio:1; position:relative; z-index:1; }
+  .sphere { width:min(40vw,520px); aspect-ratio:1; position:relative; z-index:1; }
   .sphere svg { width:100%; height:100%; display:block; }
   .empty-hint { color:#3F4C61; font-size:13px; text-align:center; }
 
@@ -449,9 +449,9 @@ function fireBeams() {
     let len = 0; for (let k = 1; k < seq.length; k++) len += Math.hypot(seq[k].x - seq[k - 1].x, seq[k].y - seq[k - 1].y);
     const seg = 46, P = Math.ceil(len) + seg, dur = Math.max(1.1, len * rand(.0062, .0115)).toFixed(2), delay = rand(0, 4.5).toFixed(2);
     const path = (w, op, stroke, lag, sg) => { const p = document.createElementNS(NSVG, 'path'); p.setAttribute('d', d); p.setAttribute('fill', 'none'); p.setAttribute('stroke-linecap', 'round'); p.style.stroke = stroke || s.c; p.style.strokeWidth = w; p.style.opacity = op; p.style.strokeDasharray = `${sg || seg} ${P - (sg || seg)}`; p.style.setProperty('--dash-to', -P); p.style.animation = `dashRun ${dur}s linear ${(parseFloat(delay) + lag).toFixed(2)}s infinite`; beams.appendChild(p); };
-    const trace = document.createElementNS(NSVG, 'path'); trace.setAttribute('d', d); trace.setAttribute('fill', 'none'); trace.setAttribute('stroke', s.c); trace.setAttribute('stroke-width', 1.1); trace.setAttribute('opacity', .18); trace.setAttribute('stroke-linecap', 'round'); beams.appendChild(trace);
-    [[.46, 1.2, .07], [.34, 1.3, .12], [.23, 1.4, .2], [.13, 1.4, .32], [.05, 1.4, .55]].forEach(([lag, w, op]) => path(w, op, null, lag));
-    path(4.4, .13, null, .1); path(1.5, .92, null, 0); path(.7, .95, '#F6FCFF', 0, seg * .42);
+    const trace = document.createElementNS(NSVG, 'path'); trace.setAttribute('d', d); trace.setAttribute('fill', 'none'); trace.setAttribute('stroke', s.c); trace.setAttribute('stroke-width', .8); trace.setAttribute('opacity', .16); trace.setAttribute('stroke-linecap', 'round'); beams.appendChild(trace);
+    [[.46, .8, .07], [.34, .85, .12], [.23, .95, .2], [.13, .95, .32], [.05, .95, .55]].forEach(([lag, w, op]) => path(w, op, null, lag));
+    path(3, .12, null, .1); path(.95, .92, null, 0); path(.5, .95, '#F6FCFF', 0, seg * .42);
   }
 }
 

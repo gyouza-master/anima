@@ -351,6 +351,18 @@
     }
     .bubble-input::after { border-top-color: #2196F3; }
 
+    .bubble-work {
+      border-color: #22C55E;
+      box-shadow: 0 6px 18px rgba(34, 197, 94, 0.25);
+    }
+    .bubble-work::after { border-top-color: #22C55E; }
+
+    .bubble-done {
+      border-color: #F59E0B;
+      box-shadow: 0 6px 18px rgba(245, 158, 11, 0.3);
+    }
+    .bubble-done::after { border-top-color: #F59E0B; }
+
     @keyframes bubble-pop {
       0% { transform: scale(0.7); opacity: 0; }
       100% { transform: scale(1); opacity: 1; }
@@ -854,13 +866,15 @@
 
         // ブラウザタブAI。生成中/完了はタブDOMのポーリングで反映（Tier2）。
         if (session.browser) {
-          // 状態バッジ: 生成中(緑) / 確認してね(橙・注目) / 待機(青)
-          let bBadge, bStyle, bAvatarCls = '';
+          // 状態バッジ＋吹き出し: 生成中(緑) / 確認してね(橙・注目) / 待機(青)
+          let bBadge, bStyle, bAvatarCls = '', bBubble = '';
           if (session.status === 'working') {
             bBadge = '🟢 生成中…'; bStyle = 'background:#DCFCE7;color:#166534;'; bAvatarCls = 'avatar-working';
+            bBubble = `<div class="bubble bubble-work"><div class="bubble-msg">${escapeHtml(char.name)}は作業中…✍️</div></div>`;
           } else if (session.status === 'awaiting-input') {
             const ago = formatTime(Date.now() - (session.status_changed_at || Date.now()));
             bBadge = `✅ 回答完了・確認してね（${ago}前）`; bStyle = 'background:#FEF3C7;color:#92400E;'; bAvatarCls = 'avatar-waiting';
+            bBubble = `<div class="bubble bubble-done"><div class="bubble-msg">回答できたよ、確認してね！👀</div></div>`;
           } else {
             bBadge = '🌐 ブラウザで表示中'; bStyle = 'background:#EEF2FF;color:#4338CA;';
           }
@@ -868,6 +882,7 @@
             ? 'box-shadow:0 0 0 3px #FDE68A, 0 4px 14px rgba(217,119,6,.25);' : '';
           return `
             <div class="slot-card" style="${attention}">
+              ${bBubble}
               <div class="avatar ${bAvatarCls}" style="opacity:.95;">${svg}</div>
               <div class="char-name">${escapeHtml(char.name)}</div>
               <div class="char-model">${session.model_name ? '🌐 ' + escapeHtml(session.model_name) : '🌐 ブラウザ'}</div>

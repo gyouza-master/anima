@@ -359,7 +359,7 @@ async function pollBrowserTabs() {
   if (changed) broadcastState();
 }
 
-setInterval(() => { pollBrowserTabs().catch(() => {}); }, 3000);
+setInterval(() => { pollBrowserTabs().catch(() => {}); }, 1500);
 
 // Discover running AI sessions (Claude Code CLI, ChatGPT app, etc.).
 // Returns each process's pid, cwd, start time, AI name, and whether anima tracks it.

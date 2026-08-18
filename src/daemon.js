@@ -4,7 +4,7 @@ import { createServer } from 'http';
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
+import { execSync, execFile } from 'child_process';
 import { sendNotification } from './notification.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -308,6 +308,58 @@ function activateBrowserTab(url) {
     return false;
   }
 }
+
+// --- ブラウザカードのライブ状態（Tier2）---
+// 接続中のブラウザタブに claude-observe.js を実行して「生成中/完了」を検知し、
+// 生成が終わったら「✅ 確認してね」を出す。要「Apple Events からの JavaScript を許可」。
+const observeJsPath = join(__dirname, '../scripts/claude-observe.js');
+const probeScript = join(__dirname, '../scripts/probe-chrome-tab.applescript');
+
+function probeBrowserTab(url) {
+  return new Promise(resolve => {
+    execFile('osascript', [probeScript, url, observeJsPath], { timeout: 4000 }, (err, stdout) => {
+      if (err) return resolve(null);
+      try { resolve(JSON.parse((stdout || '').trim())); } catch { resolve(null); }
+    });
+  });
+}
+
+let polling = false;
+async function pollBrowserTabs() {
+  if (polling) return; // avoid overlap if a probe is slow
+  const targets = Object.values(state.sessions).filter(s => s.browser && s.url);
+  if (targets.length === 0) return;
+  polling = true;
+  let changed = false;
+  try {
+    for (const s of targets) {
+      const r = await probeBrowserTab(s.url);
+      if (!r || r.err || typeof r.len !== 'number') continue;
+      // 生成中 = 停止ボタンあり、または前回ポーリングから会話テキストが増えた（ストリーミング）
+      const grew = s._len !== undefined && r.len > s._len;
+      const now = r.stop === true || grew;
+      const prev = s._gen === true;
+      if (now && !prev) {
+        s.status = 'working';
+        s.detail = '生成中…';
+        s.status_changed_at = Date.now();
+        changed = true;
+      } else if (!now && prev) {
+        s.status = 'awaiting-input';
+        s.detail = '✅ 回答完了・確認してね';
+        s.status_changed_at = Date.now();
+        changed = true;
+      }
+      s._gen = now;
+      s._len = r.len;
+    }
+  } finally {
+    polling = false;
+  }
+  if (changed) broadcastState();
+}
+
+setInterval(() => { pollBrowserTabs().catch(() => {}); }, 3000);
 
 // Discover running AI sessions (Claude Code CLI, ChatGPT app, etc.).
 // Returns each process's pid, cwd, start time, AI name, and whether anima tracks it.
